@@ -1,0 +1,13 @@
+appId: com.session-manager.app
+productName: Session Manager
+directories:
+  output: release
+files:
+  - dist/**/*
+  - resources/**/*
+mac:
+  target: dmg
+win:
+  target: nsis
+linux:
+  target: AppImage
