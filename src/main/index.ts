@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
+import { registerAllIPC } from './ipc/register';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -19,6 +20,9 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Register IPC handlers once window is ready
+  registerAllIPC(mainWindow);
 }
 
 app.whenReady().then(createWindow);
