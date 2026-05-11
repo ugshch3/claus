@@ -197,6 +197,13 @@ export function ensureBranch(workId: string): void {
 
 // ---- Internal helpers ----
 
+export function updateWorkDirect(
+  workId: string,
+  updater: (work: Work) => void
+): void {
+  updateWork(workId, updater);
+}
+
 function updateWork(
   workId: string,
   updater: (work: Work) => void

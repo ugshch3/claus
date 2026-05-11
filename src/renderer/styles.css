@@ -117,3 +117,18 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ---- Empty state ---- */
 .empty-state { text-align: center; color: #555; padding: 48px 0; font-size: 14px; }
+
+/* ---- Modal Dialog ---- */
+#dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+#dialog-overlay.hidden { display: none; }
+#dialog-box {
+  background: #16162a; border: 1px solid #2a2a4a; border-radius: 10px;
+  padding: 24px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto;
+}
+#dialog-title { font-size: 16px; margin-bottom: 12px; }
+#dialog-body { font-size: 13px; line-height: 1.5; color: #bbb; margin-bottom: 16px; }
+#dialog-body ul { margin: 8px 0; padding-left: 20px; }
+#dialog-body li { margin-bottom: 2px; font-family: monospace; font-size: 12px; color: #999; }

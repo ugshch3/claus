@@ -1,14 +1,15 @@
 import { BrowserWindow } from 'electron';
 import { RunProcess } from '../run/run-process';
 import { buildArgs } from '../run/args-builder';
-import { getWork, markRunStarted, markRunCompleted } from '../work/work-manager';
+import { getWork, markRunStarted, markRunCompleted, listWorks, updateWorkDirect } from '../work/work-manager';
 import { getProject } from '../project/project-manager';
-import { load } from '../storage/store';
+import { load, save } from '../storage/store';
 import { EVENTS } from '../../shared/ipc-channels';
 import { RunResult, StreamEvent, Work } from '../../shared/types';
 import { registerProjectHandlers } from './handlers/project';
 import { registerWorkHandlers, WorkHandlerDeps } from './handlers/work';
 import { registerSettingsHandlers } from './handlers/settings';
+import { logInfo, logError, logWarn } from '../utils/logger';
 
 const activeRuns = new Map<string, RunProcess>();
 let mainWindow: BrowserWindow;
@@ -16,9 +17,7 @@ let mainWindow: BrowserWindow;
 export function registerAllIPC(window: BrowserWindow): void {
   mainWindow = window;
 
-  // Register handlers
   registerProjectHandlers();
-
   registerSettingsHandlers();
 
   const deps: WorkHandlerDeps = {
@@ -26,6 +25,56 @@ export function registerAllIPC(window: BrowserWindow): void {
     cancelRun: (workId: string) => cancelRun(workId),
   };
   registerWorkHandlers(deps);
+
+  logInfo('IPC handlers registered');
+}
+
+/**
+ * Stop all active runs. Called before app quit.
+ */
+export function shutdownAllRuns(): void {
+  logInfo(`Shutting down ${activeRuns.size} active run(s)`);
+  for (const [workId, rp] of activeRuns) {
+    try {
+      rp.cancel();
+      const work = getWork(workId);
+      if (work && work.status === 'IN_PROGRESS') {
+        updateWorkDirect(workId, w => {
+          w.status = 'AWAITING_INPUT';
+          w.currentRunPid = null;
+          w.statusNote = 'приложение закрыто';
+        });
+      }
+    } catch (err) {
+      logError(`Error cancelling run for work ${workId}`, err);
+    }
+  }
+  activeRuns.clear();
+}
+
+/**
+ * Recover stale works after an unclean shutdown.
+ * Any work with status IN_PROGRESS or non-null currentRunPid gets reset to AWAITING_INPUT.
+ */
+export function recoverStaleWorks(): void {
+  const works = listWorks();
+  let recovered = 0;
+
+  for (const work of works) {
+    if (work.status === 'IN_PROGRESS' || work.currentRunPid !== null) {
+      logWarn(`Recovering stale work ${work.id}: status=${work.status}, pid=${work.currentRunPid}`);
+      updateWorkDirect(work.id, w => {
+        w.status = 'AWAITING_INPUT';
+        w.currentRunPid = null;
+        w.statusNote = 'восстановлен после перезапуска';
+      });
+      recovered++;
+    }
+  }
+
+  if (recovered > 0) {
+    logInfo(`Recovered ${recovered} stale work(s)`);
+  }
 }
 
 // ---- Run management ----

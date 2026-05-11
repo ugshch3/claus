@@ -12,8 +12,106 @@ const state = {
   currentView: 'works', // 'works' | 'project-create' | 'settings'
 };
 
-// ---- API helpers ----
-const api = window.electronAPI;
+// ---- Dialog helpers ----
+function showDialog(title, bodyHTML, buttons) {
+  const overlay = document.getElementById('dialog-overlay');
+  document.getElementById('dialog-title').textContent = title;
+  document.getElementById('dialog-body').innerHTML = bodyHTML;
+  const actions = document.getElementById('dialog-actions');
+  actions.innerHTML = '';
+  buttons.forEach(btn => {
+    const b = document.createElement('button');
+    b.textContent = btn.label;
+    if (btn.cls) b.className = btn.cls;
+    b.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      if (btn.onClick) btn.onClick();
+    });
+    actions.appendChild(b);
+  });
+  overlay.onclick = (e) => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  };
+  overlay.classList.remove('hidden');
+}
+
+function hideDialog() {
+  document.getElementById('dialog-overlay').classList.add('hidden');
+}
+
+// ---- Error handling ----
+function handleError(err, context) {
+  // GitNotFoundError
+  if (err.code === 'GIT_NOT_FOUND') {
+    showDialog('Git Not Found', '<p>Git is not installed. Please install Git to use Session Manager.</p>', [
+      { label: 'OK' },
+    ]);
+    return true;
+  }
+
+  // DirtyRepoError — handled specially with Discard option
+  if (err.code === 'DIRTY_REPO') {
+    const files = (err.files || []).map(f => `<li>${escapeHTML(f)}</li>`).join('');
+    showDialog(
+      'Dirty Repository',
+      `<p>The repository has uncommitted changes:</p><ul>${files}</ul><p>Discard changes or commit them manually before creating a Work.</p>`,
+      [
+        {
+          label: 'Discard Changes',
+          cls: 'danger',
+          onClick: () => context.onDiscard(),
+        },
+        { label: 'Cancel' },
+      ]
+    );
+    return true;
+  }
+
+  // BranchExistsError
+  if (err.code === 'BRANCH_EXISTS') {
+    showDialog(
+      'Branch Exists',
+      `<p>${escapeHTML(err.userMessage || 'Branch already exists')}</p><p>Please choose a different branch name.</p>`,
+      [{ label: 'OK' }]
+    );
+    return true;
+  }
+
+  return false; // not handled
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---- Work creation with error dialogs ----
+async function submitWorkCreate(params) {
+  try {
+    const work = await api.workCreate(params);
+    document.getElementById('work-create-form').classList.add('hidden');
+    document.getElementById('form-work-create').reset();
+    await loadWorks();
+    selectWork(work.id);
+  } catch (err) {
+    if (!handleError(err, {
+      onDiscard: async () => {
+        // Discard changes and retry
+        const project = state.projects.find(p => p.id === params.projectId);
+        if (project) {
+          await api.projectDiscard(project.id);
+        }
+        await submitWorkCreate(params);
+      },
+    })) {
+      // Generic error fallback
+      showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
+        { label: 'OK' },
+      ]);
+    }
+  }
+}
 
 // ---- Initialization ----
 document.addEventListener('DOMContentLoaded', async () => {
@@ -104,7 +202,11 @@ function bindForms() {
       await loadProjects();
       showView('works');
     } catch (err) {
-      alert('Error: ' + (err.userMessage || err.message || String(err)));
+      if (!handleError(err, {})) {
+        showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
+          { label: 'OK' },
+        ]);
+      }
     }
   });
 
@@ -126,19 +228,7 @@ function bindForms() {
     const branchName = document.getElementById('work-branch').value.trim();
     if (!description || !branchName) return;
 
-    try {
-      const work = await api.workCreate({
-        projectId: state.selectedProjectId,
-        description,
-        branchName,
-      });
-      document.getElementById('work-create-form').classList.add('hidden');
-      document.getElementById('form-work-create').reset();
-      await loadWorks();
-      selectWork(work.id);
-    } catch (err) {
-      alert('Error: ' + (err.userMessage || err.message || String(err)));
-    }
+    await submitWorkCreate({ projectId: state.selectedProjectId, description, branchName });
   });
 
   // Work respond form

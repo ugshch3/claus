@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
-import { registerAllIPC } from './ipc/register';
+import { registerAllIPC, shutdownAllRuns, recoverStaleWorks } from './ipc/register';
+import { logInfo } from './utils/logger';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -23,9 +24,19 @@ function createWindow(): void {
 
   // Register IPC handlers once window is ready
   registerAllIPC(mainWindow);
+
+  // Recover any works left in a stale state from previous run
+  recoverStaleWorks();
+
+  logInfo('Application started');
 }
 
 app.whenReady().then(createWindow);
+
+app.on('before-quit', () => {
+  logInfo('before-quit: stopping all runs');
+  shutdownAllRuns();
+});
 
 app.on('window-all-closed', () => {
   app.quit();
