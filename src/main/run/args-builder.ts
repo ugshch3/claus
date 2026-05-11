@@ -19,6 +19,7 @@ export function buildArgs(
 
   args.push('-p', prompt);
   args.push('--output-format', 'stream-json');
+  args.push('--verbose');  // required for stream-json to work
 
   if (settings.defaultMaxTurns > 0) {
     args.push('--max-turns', String(settings.defaultMaxTurns));

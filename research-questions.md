@@ -141,6 +141,30 @@
 
 ---
 
+### Вопрос 11: Реальный формат stream-json (экспериментальная проверка)
+
+**Проверено 2026-05-11.** Запуск `claude -p "скажи привет" --output-format stream-json --verbose --max-turns 2`.
+
+**Важное открытие:** `--output-format stream-json` требует флага `--verbose`, иначе ошибка.
+
+**Подтверждённые типы событий:**
+| Тип | subtype | Содержание |
+|-----|---------|-----------|
+| `system` | `init` | cwd, session_id, tools[], model, permissionMode, version |
+| `assistant` | — | `content[{type:"thinking", thinking:"..."}]` |
+| `assistant` | — | `content[{type:"text", text:"..."}]` |
+| `result` | `success` | `is_error:false`, `num_turns`, `total_cost_usd`, `usage{}` |
+
+**Наблюдения:**
+- `assistant` приходит **двумя** сообщениями: сначала thinking, затем text
+- `session_id` присутствует в каждом событии
+- `result.is_error` позволяет отличить успех от ошибки
+- `result.total_cost_usd` = 0 для лёгких запросов
+- `num_turns` — сколько ходов реально использовано
+- Exit code 0 при успехе
+
+---
+
 ## Статус вопросов
 
 | # | Вопрос | Статус |
