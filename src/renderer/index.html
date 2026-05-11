@@ -4,24 +4,125 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Session Manager</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 24px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #1a1a2e;
-      color: #eee;
-    }
-    h1 { font-size: 24px; margin-bottom: 8px; }
-    p { color: #888; }
-    .ready { color: #4caf50; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Session Manager</h1>
-  <p>Electron app skeleton</p>
-  <p class="ready" id="status">Loading...</p>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div id="project-section">
+        <h2>Projects</h2>
+        <button id="btn-new-project">+ New Project</button>
+        <ul id="project-list"></ul>
+      </div>
+      <div id="sidebar-footer">
+        <button id="btn-settings" class="secondary">Settings</button>
+      </div>
+    </aside>
 
-  <script src="index.js"></script>
+    <!-- Main content -->
+    <main id="main">
+      <!-- Project Create Form (hidden by default) -->
+      <div id="view-project-create" class="view hidden">
+        <h2>New Project</h2>
+        <form id="form-project-create">
+          <label>Project name <input type="text" id="proj-name" required></label>
+          <label>Local path <input type="text" id="proj-path" required></label>
+          <label>Profile
+            <select id="proj-profile">
+              <option value="generic">Generic</option>
+              <option value="android">Android</option>
+              <option value="frontend">Frontend (Node.js)</option>
+              <option value="python">Python</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="submit">Create</button>
+            <button type="button" id="btn-cancel-project">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Work List + Detail (default view) -->
+      <div id="view-works" class="view">
+        <div id="works-header">
+          <h2 id="works-title">Select a project</h2>
+          <button id="btn-new-work" class="hidden">+ New Work</button>
+        </div>
+
+        <!-- Work Create Form (hidden) -->
+        <div id="work-create-form" class="hidden form-card">
+          <h3>New Work</h3>
+          <form id="form-work-create">
+            <label>Description <textarea id="work-desc" rows="3" required></textarea></label>
+            <label>Branch name <input type="text" id="work-branch" required placeholder="feature/..."></label>
+            <div class="form-actions">
+              <button type="submit">Create & Run</button>
+              <button type="button" id="btn-cancel-work">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Work list -->
+        <ul id="work-list"></ul>
+
+        <!-- Work Detail (shown when a work is selected) -->
+        <div id="work-detail" class="hidden">
+          <div id="work-detail-header">
+            <h3 id="work-detail-title"></h3>
+            <span id="work-detail-status"></span>
+          </div>
+          <div id="work-detail-meta">
+            <span id="work-detail-branch"></span>
+            <span id="work-detail-runs"></span>
+          </div>
+
+          <!-- Run progress (IN_PROGRESS) -->
+          <div id="run-progress" class="hidden">
+            <div id="stream-events"></div>
+          </div>
+
+          <!-- AWAITING_INPUT: last result + response -->
+          <div id="awaiting-input" class="hidden">
+            <div id="last-result"></div>
+            <form id="form-respond">
+              <textarea id="respond-message" rows="3" placeholder="Your response..."></textarea>
+              <div class="form-actions">
+                <button type="submit">Send</button>
+                <button type="button" id="btn-complete-work">Mark Complete</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="work-actions">
+            <button id="btn-cancel-run" class="danger hidden">Stop Run</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div id="view-settings" class="view hidden">
+        <h2>Settings</h2>
+        <form id="form-settings">
+          <label>Watchdog timeout (minutes) <input type="number" id="set-watchdog" min="1" max="120"></label>
+          <label>Default max turns <input type="number" id="set-max-turns" min="1" max="200"></label>
+          <label>Default profile
+            <select id="set-profile">
+              <option value="generic">Generic</option>
+              <option value="android">Android</option>
+              <option value="frontend">Frontend (Node.js)</option>
+              <option value="python">Python</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="submit">Save</button>
+            <button type="button" id="btn-cancel-settings">Back</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

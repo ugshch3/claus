@@ -1,0 +1,119 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #0f0f1a; color: #ddd; height: 100vh; overflow: hidden;
+}
+
+#app { display: flex; height: 100vh; }
+
+/* ---- Sidebar ---- */
+#sidebar {
+  width: 260px; background: #16162a; display: flex; flex-direction: column;
+  border-right: 1px solid #2a2a4a; padding: 16px;
+}
+#sidebar h2 { font-size: 14px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
+#btn-new-project {
+  width: 100%; padding: 8px; border: 1px dashed #444; background: none; color: #aaa;
+  cursor: pointer; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+}
+#btn-new-project:hover { border-color: #666; color: #fff; }
+#project-list { list-style: none; flex: 1; overflow-y: auto; }
+#project-list li {
+  padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  margin-bottom: 2px; transition: background .15s;
+}
+#project-list li:hover { background: #1e1e3a; }
+#project-list li.active { background: #2a2a5a; color: #fff; }
+#sidebar-footer { padding-top: 12px; border-top: 1px solid #2a2a4a; }
+
+/* ---- Main ---- */
+#main {
+  flex: 1; overflow-y: auto; padding: 24px 32px;
+}
+#main h2 { font-size: 20px; margin-bottom: 16px; }
+#main h3 { font-size: 16px; margin-bottom: 8px; }
+
+/* ---- Views ---- */
+.view.hidden { display: none !important; }
+
+/* ---- Forms ---- */
+label { display: block; margin-bottom: 12px; font-size: 13px; color: #aaa; }
+label input, label textarea, label select {
+  display: block; width: 100%; margin-top: 4px; padding: 8px 10px;
+  background: #1a1a30; border: 1px solid #333; border-radius: 6px;
+  color: #ddd; font-size: 14px; font-family: inherit;
+}
+label input:focus, label textarea:focus, label select:focus {
+  outline: none; border-color: #555;
+}
+.form-card { background: #16162a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.form-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+/* ---- Buttons ---- */
+button {
+  padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 13px; background: #3a3a6a; color: #ddd; transition: background .15s;
+}
+button:hover { background: #4a4a7a; }
+button.secondary { background: #2a2a3a; }
+button.secondary:hover { background: #3a3a4a; }
+button.danger { background: #5a1a1a; }
+button.danger:hover { background: #6a2a2a; }
+
+/* ---- Work List ---- */
+#works-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+#work-list { list-style: none; }
+#work-list li {
+  padding: 10px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  background: #16162a; margin-bottom: 6px; border: 1px solid transparent;
+  transition: border-color .15s; display: flex; justify-content: space-between; align-items: center;
+}
+#work-list li:hover { border-color: #333; }
+#work-list li.active { border-color: #555; }
+.work-item-main { flex: 1; }
+.work-item-desc { font-size: 14px; margin-bottom: 4px; }
+.work-item-meta { font-size: 12px; color: #777; }
+
+/* ---- Status Badge ---- */
+.status-badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.status-IN_PROGRESS { background: #1a3a1a; color: #4caf50; }
+.status-AWAITING_INPUT { background: #3a3a1a; color: #ff9800; }
+.status-COMPLETED { background: #1a1a3a; color: #888; }
+
+/* ---- Work Detail ---- */
+#work-detail {
+  margin-top: 16px; padding: 16px; background: #16162a; border-radius: 8px; border: 1px solid #2a2a4a;
+}
+#work-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#work-detail-meta { display: flex; gap: 16px; font-size: 12px; color: #777; margin-bottom: 16px; }
+#stream-events { max-height: 500px; overflow-y: auto; }
+#last-result {
+  padding: 12px; background: #1a1a30; border-radius: 6px; margin-bottom: 12px;
+  font-size: 14px; line-height: 1.5; white-space: pre-wrap; max-height: 400px; overflow-y: auto;
+}
+#form-respond textarea { width: 100%; }
+.work-actions { margin-top: 12px; }
+
+/* ---- Stream Event Card ---- */
+.stream-event {
+  padding: 8px 12px; margin-bottom: 6px; border-radius: 6px;
+  background: #1a1a30; font-size: 13px; border-left: 3px solid #333;
+}
+.stream-event.type-assistant { border-color: #6a6aff; }
+.stream-event.type-result { border-color: #4caf50; }
+.stream-event.type-system { border-color: #555; }
+.stream-event.type-tool_use { border-color: #ff9800; }
+.stream-event .event-type { font-size: 10px; color: #777; text-transform: uppercase; margin-bottom: 4px; }
+.stream-event .event-content { font-size: 13px; line-height: 1.4; }
+.stream-event .event-content pre {
+  margin: 4px 0; padding: 6px 8px; background: #0f0f1a; border-radius: 4px;
+  font-size: 12px; overflow-x: auto;
+}
+
+/* ---- Thinking (collapsed by default) ---- */
+.thinking-content { display: none; font-style: italic; color: #999; }
+.thinking-toggle { font-size: 11px; color: #6a6aff; cursor: pointer; }
+.thinking-toggle:hover { text-decoration: underline; }
+
+/* ---- Empty state ---- */
+.empty-state { text-align: center; color: #555; padding: 48px 0; font-size: 14px; }
