@@ -1,4 +1,6 @@
 import * as crypto from 'crypto';
+import * as os from 'os';
+import * as path from 'path';
 import { Project } from '../../shared/types';
 import { load, save } from '../storage/store';
 import { Profile } from '../claude/claude-config';
@@ -10,16 +12,19 @@ export function createProject(params: {
 }): Project {
   const data = load();
 
-  // Check path uniqueness
-  if (data.projects.some(p => p.path === params.path)) {
+  // Resolve ~ and relative paths to absolute
+  const resolvedPath = resolvePath(params.path);
+
+  // Check path uniqueness (compare resolved paths)
+  if (data.projects.some(p => resolvePath(p.path) === resolvedPath)) {
     throw new Error(`Проект с путём '${params.path}' уже существует`);
   }
 
   const project: Project = {
     id: crypto.randomUUID(),
     name: params.name,
-    path: params.path,
-    slug: slugifyPath(params.path),
+    path: resolvedPath,
+    slug: slugifyPath(resolvedPath),
     profile: params.profile || 'generic',
     createdAt: new Date().toISOString(),
   };
@@ -65,4 +70,11 @@ export function deleteProject(id: string): void {
  */
 function slugifyPath(absPath: string): string {
   return absPath.replace(/[^a-zA-Z0-9]/g, '-');
+}
+
+function resolvePath(rawPath: string): string {
+  if (rawPath.startsWith('~')) {
+    return path.join(os.homedir(), rawPath.slice(1));
+  }
+  return path.resolve(rawPath);
 }

@@ -66,7 +66,7 @@ export class RunProcess {
       this.resetWatchdog(watchdogTimeoutMinutes);
       try {
         const event: StreamEvent = JSON.parse(line);
-        const sessionId = event.session_id || this.workId;
+        const sessionId = event.sessionId || this.workId;
         this.callbacks.onEvent(sessionId, event);
       } catch {
         // Non-JSON line (banner, warning) — ignore

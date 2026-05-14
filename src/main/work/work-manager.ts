@@ -85,7 +85,10 @@ export function getLastResult(workId: string): string | null {
   if (!project) return null;
 
   // Read the last result from the session JSONL file
-  const slug = slugifyPath(project.path);
+  const resolvedPath = project.path.startsWith('~')
+    ? path.join(os.homedir(), project.path.slice(1))
+    : project.path;
+  const slug = slugifyPath(resolvedPath);
   const jsonlPath = path.join(
     os.homedir(), '.claude', 'projects', slug, `${work.id}.jsonl`
   );
@@ -99,15 +102,23 @@ export function getLastResult(workId: string): string | null {
     // Walk backwards to find the last result
     for (let i = lines.length - 1; i >= 0; i--) {
       const entry = JSON.parse(lines[i]);
-      if (entry.type === 'result' || entry.type === 'assistant') {
+      if (entry.type === 'result') {
+        if (entry.result) {
+          return String(entry.result);
+        }
+      }
+      if (entry.type === 'assistant') {
         if (entry.message?.content) {
           if (Array.isArray(entry.message.content)) {
             const textParts = entry.message.content
               .filter((c: any) => c.type === 'text')
               .map((c: any) => c.text);
-            return textParts.join('\n');
+            if (textParts.length > 0) {
+              return textParts.join('\n');
+            }
+          } else {
+            return String(entry.message.content);
           }
-          return String(entry.message.content);
         }
       }
     }
@@ -167,7 +178,10 @@ export function deleteWork(workId: string): void {
   // Delete JSONL session file
   const project = data.projects.find(p => p.id === work.projectId);
   if (project) {
-    const slug = slugifyPath(project.path);
+    const resolvedPath = project.path.startsWith('~')
+      ? path.join(os.homedir(), project.path.slice(1))
+      : project.path;
+    const slug = slugifyPath(resolvedPath);
     const jsonlPath = path.join(
       os.homedir(), '.claude', 'projects', slug, `${work.id}.jsonl`
     );
