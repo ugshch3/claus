@@ -43,9 +43,8 @@ export class RunProcess {
     logStream.write(`\n=== Run started at ${new Date().toISOString()} ===\n`);
     logStream.write(`Command: claude ${args.join(' ')}\n\n`);
 
-    // The actual Claude Code binary — use 'claude' command
-    // (the caller should use the correct env/path)
-    this.process = spawn('claude', args, {
+    // Use claude-sm wrapper (sources shell snapshot + claude-deepseek-v4)
+    this.process = spawn('claude-sm', args, {
       cwd: projectPath,
       env: {
         ...process.env,

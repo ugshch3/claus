@@ -20,10 +20,18 @@ body {
 #project-list { list-style: none; flex: 1; overflow-y: auto; }
 #project-list li {
   padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
-  margin-bottom: 2px; transition: background .15s;
+  margin-bottom: 2px; transition: background .15s; display: flex;
+  justify-content: space-between; align-items: center;
 }
 #project-list li:hover { background: #1e1e3a; }
 #project-list li.active { background: #2a2a5a; color: #fff; }
+.project-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-delete {
+  background: none; border: none; color: #555; cursor: pointer; font-size: 14px;
+  padding: 0 4px; line-height: 1; visibility: hidden;
+}
+#project-list li:hover .project-delete { visibility: visible; }
+.project-delete:hover { color: #f44; }
 #sidebar-footer { padding-top: 12px; border-top: 1px solid #2a2a4a; }
 
 /* ---- Main ---- */
@@ -35,6 +43,7 @@ body {
 
 /* ---- Views ---- */
 .view.hidden { display: none !important; }
+.hidden { display: none !important; }
 
 /* ---- Forms ---- */
 label { display: block; margin-bottom: 12px; font-size: 13px; color: #aaa; }
@@ -61,7 +70,8 @@ button.danger { background: #5a1a1a; }
 button.danger:hover { background: #6a2a2a; }
 
 /* ---- Work List ---- */
-#works-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+#works-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+#works-path { font-size: 12px; color: #666; margin-top: 2px; font-family: monospace; }
 #work-list { list-style: none; }
 #work-list li {
   padding: 10px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;
@@ -86,7 +96,11 @@ button.danger:hover { background: #6a2a2a; }
 }
 #work-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 #work-detail-meta { display: flex; gap: 16px; font-size: 12px; color: #777; margin-bottom: 16px; }
-#stream-events { max-height: 500px; overflow-y: auto; }
+#stream-events { max-height: 500px; overflow-y: auto; min-height: 60px; }
+#stream-events:empty::after {
+  content: 'Waiting for Claude...'; display: block; color: #555; text-align: center;
+  padding: 24px; font-size: 13px;
+}
 #last-result {
   padding: 12px; background: #1a1a30; border-radius: 6px; margin-bottom: 12px;
   font-size: 14px; line-height: 1.5; white-space: pre-wrap; max-height: 400px; overflow-y: auto;

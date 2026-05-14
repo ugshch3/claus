@@ -75,7 +75,30 @@ function generateSettingsJson(): string {
   return JSON.stringify(settings, null, 2) + '\n';
 }
 
+function ensureGitignore(projectPath: string): void {
+  const gitignorePath = path.join(projectPath, '.gitignore');
+  const entry = '.claude/';
+
+  let content = '';
+  if (fs.existsSync(gitignorePath)) {
+    content = fs.readFileSync(gitignorePath, 'utf-8');
+  }
+
+  // Check if .claude is already ignored
+  const lines = content.split('\n');
+  if (lines.some(l => l.trim() === '.claude/' || l.trim() === '.claude')) {
+    return;
+  }
+
+  // Append with a newline separator if needed
+  const toAppend = (content && !content.endsWith('\n') ? '\n' : '') + entry + '\n';
+  fs.appendFileSync(gitignorePath, toAppend, 'utf-8');
+}
+
 export function ensure(projectPath: string, profile: Profile): void {
+  // Ensure .claude/ is gitignored BEFORE we create files inside it
+  ensureGitignore(projectPath);
+
   const claudeDir = path.join(projectPath, '.claude');
   const hooksDir = path.join(claudeDir, 'hooks');
   const settingsFile = path.join(claudeDir, 'settings.json');
@@ -102,6 +125,9 @@ export function ensure(projectPath: string, profile: Profile): void {
 }
 
 export function sync(projectPath: string, profile: Profile): void {
+  // Ensure .claude/ is gitignored
+  ensureGitignore(projectPath);
+
   const claudeDir = path.join(projectPath, '.claude');
   const hooksDir = path.join(claudeDir, 'hooks');
   const settingsFile = path.join(claudeDir, 'settings.json');

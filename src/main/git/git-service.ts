@@ -85,8 +85,10 @@ export function isDirty(projectPath: string): { isDirty: boolean; files: string[
   }
   const lines = output.split('\n').filter(l => l.length > 0);
   // Each line: "XY filename" — XY are status codes, then space, then filename
-  const files = lines.map(l => l.substring(3));
-  return { isDirty: true, files };
+  const files = lines
+    .map(l => l.substring(3))
+    .filter(f => !f.startsWith('.claude/')); // app-managed directory
+  return { isDirty: files.length > 0, files };
 }
 
 export function discardChanges(projectPath: string): void {

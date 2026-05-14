@@ -12,6 +12,9 @@ const state = {
   currentView: 'works', // 'works' | 'project-create' | 'settings'
 };
 
+// ---- API helpers ----
+const api = window.electronAPI;
+
 // ---- Dialog helpers ----
 function showDialog(title, bodyHTML, buttons) {
   const overlay = document.getElementById('dialog-overlay');
@@ -115,11 +118,15 @@ async function submitWorkCreate(params) {
 
 // ---- Initialization ----
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadProjects();
-  await loadSettings();
+  // Bind UI handlers first — always works regardless of data
   bindNavigation();
   bindForms();
   bindEvents();
+
+  // Load data; failures are non-fatal
+  try { await loadProjects(); } catch (e) { console.error('loadProjects failed:', e); }
+  try { await loadSettings(); } catch (e) { console.error('loadSettings failed:', e); }
+
   showView('works');
 });
 
@@ -167,9 +174,24 @@ function renderProjectList() {
   list.innerHTML = '';
   state.projects.forEach(p => {
     const li = document.createElement('li');
-    li.textContent = p.name;
     li.className = p.id === state.selectedProjectId ? 'active' : '';
-    li.addEventListener('click', () => selectProject(p.id));
+
+    const name = document.createElement('span');
+    name.className = 'project-name';
+    name.textContent = p.name;
+    name.addEventListener('click', () => selectProject(p.id));
+
+    const del = document.createElement('button');
+    del.className = 'project-delete';
+    del.textContent = '×';
+    del.title = 'Delete project';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteProject(p);
+    });
+
+    li.appendChild(name);
+    li.appendChild(del);
     list.appendChild(li);
   });
 }
@@ -178,13 +200,48 @@ async function selectProject(id) {
   state.selectedProjectId = id;
   state.selectedWorkId = null;
   renderProjectList();
+  const project = state.projects.find(p => p.id === id);
   document.getElementById('works-title').textContent =
-    state.projects.find(p => p.id === id)?.name || 'Select a project';
+    project?.name || 'Select a project';
+  document.getElementById('works-path').textContent = project?.path || '';
   document.getElementById('btn-new-work').classList.remove('hidden');
   document.getElementById('work-detail').classList.add('hidden');
   document.getElementById('work-create-form').classList.add('hidden');
   await loadWorks();
   showView('works');
+}
+
+async function deleteProject(project) {
+  showDialog(
+    'Delete Project',
+    `<p>Delete project <strong>${escapeHTML(project.name)}</strong>?</p><p>Works and session data will be permanently removed. This action cannot be undone.</p>`,
+    [
+      {
+        label: 'Delete',
+        cls: 'danger',
+        onClick: async () => {
+          try {
+            await api.projectDelete(project.id);
+            if (state.selectedProjectId === project.id) {
+              state.selectedProjectId = null;
+              state.selectedWorkId = null;
+              document.getElementById('works-title').textContent = 'Select a project';
+              document.getElementById('works-path').textContent = '';
+              document.getElementById('btn-new-work').classList.add('hidden');
+              document.getElementById('work-detail').classList.add('hidden');
+              document.getElementById('work-list').innerHTML = '';
+            }
+            await loadProjects();
+          } catch (err) {
+            showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
+              { label: 'OK' },
+            ]);
+          }
+        },
+      },
+      { label: 'Cancel' },
+    ]
+  );
 }
 
 // ---- Project Create ----
