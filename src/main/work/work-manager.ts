@@ -128,6 +128,24 @@ export function getLastResult(workId: string): string | null {
   }
 }
 
+export function sessionFileExists(workId: string): boolean {
+  const work = getWork(workId);
+  if (!work) return false;
+
+  const project = getProject(work.projectId);
+  if (!project) return false;
+
+  const resolvedPath = project.path.startsWith('~')
+    ? path.join(os.homedir(), project.path.slice(1))
+    : project.path;
+  const slug = slugifyPath(resolvedPath);
+  const jsonlPath = path.join(
+    os.homedir(), '.claude', 'projects', slug, `${work.id}.jsonl`
+  );
+
+  return fs.existsSync(jsonlPath);
+}
+
 export function markRunStarted(workId: string, pid: number): void {
   updateWork(workId, work => {
     work.status = 'IN_PROGRESS';

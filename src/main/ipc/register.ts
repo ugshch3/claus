@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { RunProcess } from '../run/run-process';
 import { buildArgs } from '../run/args-builder';
-import { getWork, markRunStarted, markRunCompleted, listWorks, updateWorkDirect } from '../work/work-manager';
+import { getWork, markRunStarted, markRunCompleted, listWorks, updateWorkDirect, sessionFileExists } from '../work/work-manager';
 import { getProject } from '../project/project-manager';
 import { load, save } from '../storage/store';
 import { EVENTS } from '../../shared/ipc-channels';
@@ -94,8 +94,8 @@ function spawnRun(workId: string, prompt: string): void {
     activeRuns.delete(workId);
   }
 
-  // Determine if this is a resume
-  const isResume = work.runCount > 0;
+  // Determine if this is a resume (only if session file exists from previous run)
+  const isResume = work.runCount > 0 && sessionFileExists(workId);
 
   const args = buildArgs(workId, prompt, settings, isResume);
 
