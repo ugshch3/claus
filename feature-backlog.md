@@ -44,6 +44,26 @@
 
 ---
 
+## Bugs
+
+### B1 — Проблема с правами на редактирование
+- **Приоритет:** High
+- **Симптом:** Claude Code не может редактировать файлы — возможно, проблема с конфигурацией permissions в `settings.json` или `classify-bash.sh`, либо с авто-разрешением Edit/Write.
+- **Что нужно:** Проверить, какие именно права блокируются. Проверить `claude-config.ts` — корректно ли генерируется `settings.json` (allow: Read, Glob, Grep, Edit, Write). Проверить, не перезаписываются ли права где-то ещё. Проверить `classify-bash.sh` — не блокирует ли хук лишнего.
+- **Затронутые файлы:** `src/main/claude/claude-config.ts`, `src/main/ipc/handlers/project.ts`
+
+### B2 — Work в статусе AWAITING_INPUT (stopped) показывает "(no output)"
+- **Приоритет:** Medium
+- **Симптом:** Проект `/Users/k.chernyadiev/PycharmProjects/GOL`, Work в статусе `AWAITING_INPUT` (stopped), но результат отображается как "(no output)".
+- **Что нужно:** Выяснить, почему `getLastResult()` не находит текст результата:
+  - Проверить, существует ли JSONL-файл сессии в `~/.claude/projects/<slug>/`
+  - Проверить логику `WorkManager.getLastResult()` — корректно ли читает JSONL и ищет последний `result`/`assistant` event
+  - Проверить формат событий в JSONL — возможно, при остановке (SIGTERM) не пишется финальное событие
+  - Проверить логику восстановления после перезапуска в `register.ts` — корректно ли восстанавливается `AWAITING_INPUT` с пометкой `stopped`
+- **Затронутые файлы:** `src/main/work/work-manager.ts`, `src/main/run/run-process.ts`, `src/main/ipc/register.ts`, `src/main/ipc/handlers/work.ts`
+
+---
+
 ## Research Debt
 
 ### Q7 — Формат событий при превышении `--max-budget-usd`

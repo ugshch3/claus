@@ -96,7 +96,7 @@ async function submitWorkCreate(params) {
     document.getElementById('work-create-form').classList.add('hidden');
     document.getElementById('form-work-create').reset();
     await loadWorks();
-    selectWork(work.id);
+    await selectWork(work.id);
   } catch (err) {
     if (!handleError(err, {
       onDiscard: async () => {
@@ -294,6 +294,13 @@ function bindForms() {
     const message = document.getElementById('respond-message').value.trim();
     if (!message || !state.selectedWorkId) return;
     document.getElementById('respond-message').value = '';
+
+    // Immediately show progress view for instant feedback
+    document.getElementById('run-progress').classList.remove('hidden');
+    document.getElementById('awaiting-input').classList.add('hidden');
+    document.getElementById('btn-cancel-run').classList.remove('hidden');
+    document.getElementById('stream-events').innerHTML = '';
+
     await api.workRespond(state.selectedWorkId, message);
   });
 
@@ -490,7 +497,7 @@ function renderSettingsForm() {
 
 // ---- IPC Events (Main → Renderer) ----
 function bindEvents() {
-  api.onRunStarted(({ workId }) => {
+  api.onRunStarted(async ({ workId }) => {
     if (!state.activeRuns[workId]) {
       state.activeRuns[workId] = { events: [] };
     }
@@ -498,8 +505,12 @@ function bindEvents() {
     if (workId === state.selectedWorkId) {
       document.getElementById('stream-events').innerHTML = '';
     }
-    // Refresh work list to show IN_PROGRESS
-    loadWorks();
+    await loadWorks();
+    // Transition UI to IN_PROGRESS if this work is selected
+    if (workId === state.selectedWorkId) {
+      const { work } = await api.workGet(workId);
+      renderWorkDetail(work, null);
+    }
   });
 
   api.onRunEvent(({ workId, event }) => {

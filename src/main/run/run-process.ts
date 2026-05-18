@@ -115,6 +115,9 @@ export class RunProcess {
 
     // Start watchdog
     this.resetWatchdog(watchdogTimeoutMinutes);
+
+    // Notify that the process has started
+    this.callbacks.onStarted(this.workId);
   }
 
   /**
