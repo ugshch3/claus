@@ -3,7 +3,7 @@ import {
   listProjects, getProject, createProject, deleteProject,
 } from '../../project/project-manager';
 import { isDirty, discardChanges, branchExists } from '../../git/git-service';
-import { ensure as ensureClaudeConfig } from '../../claude/claude-config';
+import { sync as syncClaudeConfig } from '../../claude/claude-config';
 import { Profile } from '../../claude/claude-config';
 import { IPC } from '../../../shared/ipc-channels';
 
@@ -23,7 +23,7 @@ export function registerProjectHandlers(): void {
     async (_event, params: { name: string; path: string; profile?: Profile }) => {
       const project = createProject(params);
       // Set up Claude Code config for the project
-      ensureClaudeConfig(project.path, project.profile);
+      syncClaudeConfig(project.path, project.profile);
       return project;
     }
   );

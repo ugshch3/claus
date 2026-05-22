@@ -95,35 +95,6 @@ function ensureGitignore(projectPath: string): void {
   fs.appendFileSync(gitignorePath, toAppend, 'utf-8');
 }
 
-export function ensure(projectPath: string, profile: Profile): void {
-  const claudeDir = path.join(projectPath, '.claude');
-  const hooksDir = path.join(claudeDir, 'hooks');
-  const settingsFile = path.join(claudeDir, 'settings.json');
-  const hookFile = path.join(hooksDir, 'classify-bash.sh');
-
-  // Create directories first — ensures projectPath exists before writing files
-  if (!fs.existsSync(claudeDir)) {
-    fs.mkdirSync(claudeDir, { recursive: true });
-  }
-  if (!fs.existsSync(hooksDir)) {
-    fs.mkdirSync(hooksDir, { recursive: true });
-  }
-
-  // Ensure .claude/ is gitignored after directories exist
-  ensureGitignore(projectPath);
-
-  // Write settings.json only if it doesn't exist
-  if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(settingsFile, generateSettingsJson(), 'utf-8');
-  }
-
-  // Write hook only if it doesn't exist
-  if (!fs.existsSync(hookFile)) {
-    fs.writeFileSync(hookFile, generateHookScript(profile), 'utf-8');
-    fs.chmodSync(hookFile, 0o755);
-  }
-}
-
 export function sync(projectPath: string, profile: Profile): void {
   const claudeDir = path.join(projectPath, '.claude');
   const hooksDir = path.join(claudeDir, 'hooks');
