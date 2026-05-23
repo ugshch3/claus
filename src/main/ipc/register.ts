@@ -10,6 +10,11 @@ import { registerProjectHandlers } from './handlers/project';
 import { registerWorkHandlers, WorkHandlerDeps } from './handlers/work';
 import { registerSettingsHandlers } from './handlers/settings';
 import { logInfo, logError, logWarn } from '../utils/logger';
+import {
+  backupLocalSettings,
+  writeLocalSettings,
+  restoreLocalSettings,
+} from '../claude/claude-config';
 
 const activeRuns = new Map<string, RunProcess>();
 let mainWindow: BrowserWindow;
@@ -59,6 +64,7 @@ export function shutdownAllRuns(): void {
 export function recoverStaleWorks(): void {
   const works = listWorks();
   let recovered = 0;
+  const restoredProjects = new Set<string>();
 
   for (const work of works) {
     if (work.status === 'IN_PROGRESS' || work.currentRunPid !== null) {
@@ -69,6 +75,17 @@ export function recoverStaleWorks(): void {
         w.statusNote = 'восстановлен после перезапуска';
       });
       recovered++;
+
+      // Restore user's settings.local.json if an orphan backup exists
+      const project = getProject(work.projectId);
+      if (project && !restoredProjects.has(project.path)) {
+        restoredProjects.add(project.path);
+        try {
+          restoreLocalSettings(project.path);
+        } catch (err) {
+          logError(`Failed to restore local settings for project ${project.id}`, err);
+        }
+      }
     }
   }
 
@@ -99,6 +116,10 @@ function spawnRun(workId: string, prompt: string): void {
 
   const args = buildArgs(workId, prompt, settings, isResume);
 
+  // Replace user's settings.local.json with our permissions for the duration of this run
+  backupLocalSettings(project.path);
+  writeLocalSettings(project.path);
+
   const rp = new RunProcess(
     {
       onStarted: (sessionId: string) => {
@@ -112,6 +133,7 @@ function spawnRun(workId: string, prompt: string): void {
       onCompleted: (sessionId: string, result: RunResult) => {
         markRunCompleted(workId, result.reason);
         activeRuns.delete(workId);
+        restoreLocalSettings(project.path);
         mainWindow.webContents.send(EVENTS.RUN_COMPLETED, {
           workId,
           exitCode: result.exitCode,
@@ -133,6 +155,14 @@ function cancelRun(workId: string): void {
     rp.cancel();
   }
   activeRuns.delete(workId);
+
+  const work = getWork(workId);
+  if (work) {
+    const project = getProject(work.projectId);
+    if (project) {
+      restoreLocalSettings(project.path);
+    }
+  }
 }
 
 function sendWorkUpdate(workId: string): void {
