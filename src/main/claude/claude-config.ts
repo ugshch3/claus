@@ -118,4 +118,57 @@ export function sync(projectPath: string, profile: Profile): void {
   fs.chmodSync(hookFile, 0o755);
 }
 
+function generateLocalSettingsJson(): string {
+  const settings = {
+    permissions: {
+      allow: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
+    },
+  };
+  return JSON.stringify(settings, null, 2) + '\n';
+}
+
+const LOCAL_BACKUP_SUFFIX = '.backup';
+
+/**
+ * Backup user's settings.local.json before a Work run, so our permissions take effect.
+ * Idempotent: only backs up if the file exists AND no backup already present.
+ */
+export function backupLocalSettings(projectPath: string): void {
+  const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
+  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
+
+  if (!fs.existsSync(localSettings)) return; // nothing to back up
+  if (fs.existsSync(backupFile)) return;      // already backed up (e.g. another active Work)
+
+  fs.copyFileSync(localSettings, backupFile);
+}
+
+/**
+ * Restore user's settings.local.json after a Work run completes.
+ * If no backup exists, removes our settings (user had no local settings before the run).
+ */
+export function restoreLocalSettings(projectPath: string): void {
+  const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
+  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
+
+  if (fs.existsSync(backupFile)) {
+    fs.copyFileSync(backupFile, localSettings);
+    fs.unlinkSync(backupFile);
+  }
+  // No backup = user had no settings.local.json before the run.
+  // Leave our file in place — it's harmless and ensures permissions until next sync.
+}
+
+/**
+ * Write our permissions to settings.local.json for the duration of a Work run.
+ */
+export function writeLocalSettings(projectPath: string): void {
+  const claudeDir = path.join(projectPath, '.claude');
+  if (!fs.existsSync(claudeDir)) {
+    fs.mkdirSync(claudeDir, { recursive: true });
+  }
+  const localSettings = path.join(claudeDir, 'settings.local.json');
+  fs.writeFileSync(localSettings, generateLocalSettingsJson(), 'utf-8');
+}
+
 export { generateHookScript };
