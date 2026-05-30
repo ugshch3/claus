@@ -415,6 +415,7 @@ function renderWorkDetail(work, lastResult) {
   } else if (work.status === 'AWAITING_INPUT') {
     runProgress.classList.add('hidden');
     awaitingInput.classList.remove('hidden');
+    document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
     const resultEl = document.getElementById('last-result');
     resultEl.textContent = lastResult || '(no output)';
