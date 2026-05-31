@@ -472,6 +472,8 @@ function renderStreamEvent(event) {
         const textEl = document.createElement('span');
         textEl.textContent = part.text;
         content.appendChild(textEl);
+      } else if (part.type === 'tool_use') {
+        content.appendChild(renderToolUse(part));
       }
     });
   } else if (event.type === 'result') {
@@ -486,6 +488,41 @@ function renderStreamEvent(event) {
 
   div.appendChild(typeLabel);
   div.appendChild(content);
+  return div;
+}
+
+function renderToolUse(part) {
+  const div = document.createElement('div');
+  div.className = 'tool-use-block';
+
+  const label = document.createElement('div');
+  label.className = 'tool-use-label';
+  label.textContent = part.name;
+  div.appendChild(label);
+
+  if (part.name === 'AskUserQuestion' && part.input?.questions) {
+    part.input.questions.forEach(q => {
+      const qDiv = document.createElement('div');
+      qDiv.className = 'tool-use-question';
+      qDiv.textContent = q.question;
+      if (q.options) {
+        const opts = document.createElement('ul');
+        opts.className = 'tool-use-options';
+        q.options.forEach(opt => {
+          const li = document.createElement('li');
+          li.textContent = opt.label + (opt.description ? ` — ${opt.description}` : '');
+          opts.appendChild(li);
+        });
+        qDiv.appendChild(opts);
+      }
+      div.appendChild(qDiv);
+    });
+  } else {
+    const details = document.createElement('pre');
+    details.textContent = JSON.stringify(part.input, null, 1);
+    div.appendChild(details);
+  }
+
   return div;
 }
 

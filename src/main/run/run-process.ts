@@ -19,6 +19,7 @@ export class RunProcess {
   private callbacks: RunCallbacks;
   private workId: string;
   private cancelled: boolean = false;
+  private awaitingInput: boolean = false;
 
   constructor(callbacks: RunCallbacks, workId: string) {
     this.callbacks = callbacks;
@@ -54,6 +55,7 @@ export class RunProcess {
     });
 
     this.cancelled = false;
+    this.awaitingInput = false;
 
     // ---- stdout: parse stream-json ----
     const rl = readline.createInterface({
@@ -68,6 +70,17 @@ export class RunProcess {
         const event: StreamEvent = JSON.parse(line);
         const sessionId = event.sessionId || this.workId;
         this.callbacks.onEvent(sessionId, event);
+
+        // Detect AskUserQuestion tool use — transition to AWAITING_INPUT
+        if (
+          event.type === 'assistant' &&
+          event.message?.content &&
+          event.message.content.some(
+            (c: any) => c.type === 'tool_use' && c.name === 'AskUserQuestion'
+          )
+        ) {
+          this.handleAwaitingInput(logStream);
+        }
       } catch {
         // Non-JSON line (banner, warning) — ignore
       }
@@ -87,7 +100,9 @@ export class RunProcess {
 
       const exitCode = code ?? -1;
       let reason: RunReason;
-      if (this.cancelled) {
+      if (this.awaitingInput) {
+        reason = 'ok';
+      } else if (this.cancelled) {
         reason = 'stopped';
       } else if (exitCode === 0) {
         reason = 'ok';
@@ -153,6 +168,21 @@ export class RunProcess {
   }
 
   // ---- Private ----
+
+  private handleAwaitingInput(logStream: fs.WriteStream): void {
+    if (!this.isRunning()) return;
+    this.awaitingInput = true;
+    logStream.write(`[detected AskUserQuestion — closing stdin]\n`);
+    this.process!.stdin!.end();
+
+    // Fallback: if process doesn't exit within 5s, force kill
+    setTimeout(() => {
+      if (this.isRunning()) {
+        logStream.write(`[fallback: force kill after AskUserQuestion]\n`);
+        this.cancel();
+      }
+    }, 5000);
+  }
 
   private resetWatchdog(minutes: number): void {
     if (this.watchdogTimer) {

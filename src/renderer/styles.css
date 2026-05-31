@@ -129,6 +129,24 @@ button.danger:hover { background: #6a2a2a; }
 .thinking-toggle { font-size: 11px; color: #6a6aff; cursor: pointer; }
 .thinking-toggle:hover { text-decoration: underline; }
 
+/* ---- Tool Use Block (e.g. AskUserQuestion) ---- */
+.tool-use-block {
+  margin: 6px 0; padding: 8px 10px; background: #1a1a30; border-radius: 6px;
+  border: 1px solid #3a3a5a;
+}
+.tool-use-label {
+  font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px;
+}
+.tool-use-question {
+  font-size: 13px; color: #ddd; margin-top: 6px;
+}
+.tool-use-options {
+  margin: 4px 0 0 16px; padding: 0; font-size: 12px; color: #aaa;
+}
+.tool-use-options li {
+  margin-bottom: 2px;
+}
+
 /* ---- Empty state ---- */
 .empty-state { text-align: center; color: #555; padding: 48px 0; font-size: 14px; }
 
