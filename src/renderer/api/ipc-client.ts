@@ -20,7 +20,7 @@ interface ElectronAPI {
 
   workList(projectId?: string): Promise<Work[]>;
   workGet(id: string): Promise<{ work: Work; lastResult: string | null }>;
-  workCreate(params: { projectId: string; description: string; branchName: string }): Promise<Work>;
+  workCreate(params: { projectId: string; description: string }): Promise<Work>;
   workDelete(id: string): Promise<void>;
   workComplete(id: string): Promise<void>;
   workRespond(id: string, message: string): Promise<void>;

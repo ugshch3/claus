@@ -2,7 +2,6 @@ import { ipcMain } from 'electron';
 import {
   createWork, listWorks, getWork, getLastResult,
   completeWork, deleteWork, markRunStarted, markRunCompleted,
-  ensureBranch,
 } from '../../work/work-manager';
 import { getProject } from '../../project/project-manager';
 import { IPC } from '../../../shared/ipc-channels';
@@ -33,7 +32,7 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_CREATE,
     async (
       _event,
-      params: { projectId: string; description: string; branchName: string }
+      params: { projectId: string; description: string }
     ) => {
       const work = createWork(params);
       // Spawn the first run with the work description
@@ -58,7 +57,6 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
       if (!work) throw new Error(`Work с id '${id}' не найден`);
 
       markRunStarted(id, 0); // PID will be updated by spawnRun
-      ensureBranch(id);
       deps.spawnRun(id, message);  // use user's response as prompt
     }
   );
@@ -72,7 +70,6 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     const work = getWork(id);
     if (!work) throw new Error(`Work с id '${id}' не найден`);
 
-    ensureBranch(id);
     deps.spawnRun(id, work.description);  // re-use original description
   });
 }

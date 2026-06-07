@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { Work } from '../../shared/types';
 import { load, save } from '../storage/store';
 import { getProject } from '../project/project-manager';
-import { isDirty, branchExists, createBranch, checkout, getDefaultBranch, DirtyRepoError, BranchExistsError } from '../git/git-service';
+import { getCurrentBranch } from '../git/git-service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,7 +12,6 @@ import * as os from 'os';
 export function createWork(params: {
   projectId: string;
   description: string;
-  branchName: string;
 }): Work {
   const data = load();
 
@@ -20,17 +19,6 @@ export function createWork(params: {
   const project = data.projects.find(p => p.id === params.projectId);
   if (!project) {
     throw new Error(`Проект с id '${params.projectId}' не найден`);
-  }
-
-  // Check dirty repo
-  const dirty = isDirty(project.path);
-  if (dirty.isDirty) {
-    throw new DirtyRepoError(dirty.files);
-  }
-
-  // Check branch name conflict (local only)
-  if (branchExists(project.path, params.branchName)) {
-    throw new BranchExistsError(params.branchName);
   }
 
   // Check no active run in this project
@@ -41,9 +29,13 @@ export function createWork(params: {
     throw new Error('В проекте уже есть выполняющийся Work');
   }
 
-  // Create branch from default
-  const baseBranch = getDefaultBranch(project.path);
-  createBranch(project.path, params.branchName, baseBranch);
+  // Record current branch (Claude Code decides whether to switch)
+  let currentBranch = '';
+  try {
+    currentBranch = getCurrentBranch(project.path);
+  } catch {
+    // Not a git repo — leave empty
+  }
 
   // Create work
   const now = new Date().toISOString();
@@ -51,7 +43,7 @@ export function createWork(params: {
     id: crypto.randomUUID(),
     projectId: params.projectId,
     description: params.description,
-    branch: params.branchName,
+    branch: currentBranch,
     status: 'IN_PROGRESS',
     currentRunPid: null,
     runCount: 0,
@@ -214,17 +206,6 @@ export function deleteWork(workId: string): void {
 
   data.works.splice(idx, 1);
   save(data);
-}
-
-// Ensure work's branch is checked out before a run
-export function ensureBranch(workId: string): void {
-  const work = getWork(workId);
-  if (!work) throw new Error(`Work с id '${workId}' не найден`);
-
-  const project = getProject(work.projectId);
-  if (!project) throw new Error(`Проект не найден`);
-
-  checkout(project.path, work.branch);
 }
 
 // ---- Internal helpers ----

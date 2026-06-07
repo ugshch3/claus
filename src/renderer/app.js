@@ -282,10 +282,9 @@ function bindForms() {
   document.getElementById('form-work-create').addEventListener('submit', async (e) => {
     e.preventDefault();
     const description = document.getElementById('work-desc').value.trim();
-    const branchName = document.getElementById('work-branch').value.trim();
-    if (!description || !branchName) return;
+    if (!description) return;
 
-    await submitWorkCreate({ projectId: state.selectedProjectId, description, branchName });
+    await submitWorkCreate({ projectId: state.selectedProjectId, description });
   });
 
   // Work respond form
