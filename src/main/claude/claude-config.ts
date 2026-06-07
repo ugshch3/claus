@@ -121,7 +121,20 @@ export function sync(projectPath: string, profile: Profile): void {
 function generateLocalSettingsJson(): string {
   const settings = {
     permissions: {
-      allow: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
+      allow: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'],
+    },
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [
+            {
+              type: 'command',
+              command: '.claude/hooks/classify-bash.sh',
+            },
+          ],
+        },
+      ],
     },
   };
   return JSON.stringify(settings, null, 2) + '\n';
