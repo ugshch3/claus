@@ -131,13 +131,32 @@ function spawnRun(workId: string, prompt: string): void {
         mainWindow.webContents.send(EVENTS.RUN_EVENT, { workId, event });
       },
       onCompleted: (sessionId: string, result: RunResult) => {
-        markRunCompleted(workId, result.reason);
+        // Guard: if onCompleted was already called (defence in depth — RunProcess
+        // also has a completed flag, but this protects against edge cases)
+        if (!activeRuns.has(workId)) return;
+
+        const NOTE: Record<RunResult['reason'], string | undefined> = {
+          ok: undefined,
+          error: 'ошибка',
+          timeout: 'таймаут',
+          stopped: 'остановлено',
+          config: 'wrapper misconfigured',
+        };
+        if (result.reason === 'config') {
+          logError(
+            `Run ${workId} failed with exit 127 (command not found) — ` +
+            `claude-sm wrapper / environment misconfigured`,
+            result.errorDetail
+          );
+        }
+        markRunCompleted(workId, NOTE[result.reason], result.errorDetail);
         activeRuns.delete(workId);
         restoreLocalSettings(project.path);
         mainWindow.webContents.send(EVENTS.RUN_COMPLETED, {
           workId,
           exitCode: result.exitCode,
           reason: result.reason,
+          errorDetail: result.errorDetail,
         });
         sendWorkUpdate(workId);
       },
