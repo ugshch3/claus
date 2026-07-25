@@ -417,7 +417,15 @@ function renderWorkDetail(work, lastResult) {
     document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
     const resultEl = document.getElementById('last-result');
-    resultEl.textContent = lastResult || '(no output)';
+    if (work.lastError) {
+      // Run failed (e.g. exit 127 — wrapper misconfigured): surface stderr
+      // instead of the stale result from the previous successful run.
+      resultEl.textContent = `⚠️ Run failed${work.statusNote ? ` (${work.statusNote})` : ''}:\n\n${work.lastError}`;
+      resultEl.classList.add('result-error');
+    } else {
+      resultEl.textContent = lastResult || '(no output)';
+      resultEl.classList.remove('result-error');
+    }
     document.getElementById('respond-message').value = '';
   } else {
     // COMPLETED
@@ -544,9 +552,12 @@ function bindEvents() {
     }
     await loadWorks();
     // Transition UI to IN_PROGRESS if this work is selected
+    // Check status: if onRunCompleted already fired (fast exit), skip to avoid overwriting
     if (workId === state.selectedWorkId) {
       const { work } = await api.workGet(workId);
-      renderWorkDetail(work, null);
+      if (work.status === 'IN_PROGRESS') {
+        renderWorkDetail(work, null);
+      }
     }
   });
 
