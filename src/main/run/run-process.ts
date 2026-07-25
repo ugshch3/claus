@@ -20,6 +20,9 @@ export class RunProcess {
   private workId: string;
   private cancelled: boolean = false;
   private awaitingInput: boolean = false;
+  private stderrTail: string = '';
+  private completed: boolean = false;
+  private timeoutOccurred: boolean = false;
 
   constructor(callbacks: RunCallbacks, workId: string) {
     this.callbacks = callbacks;
@@ -56,6 +59,9 @@ export class RunProcess {
 
     this.cancelled = false;
     this.awaitingInput = false;
+    this.stderrTail = '';
+    this.completed = false;
+    this.timeoutOccurred = false;
 
     // ---- stdout: parse stream-json ----
     const rl = readline.createInterface({
@@ -88,7 +94,10 @@ export class RunProcess {
 
     // ---- stderr: write to log ----
     this.process.stderr!.on('data', (chunk: Buffer) => {
-      logStream.write(`[stderr] ${chunk.toString()}`);
+      const text = chunk.toString();
+      logStream.write(`[stderr] ${text}`);
+      // Keep the last ~4000 chars so we can surface the failure reason in the UI
+      this.stderrTail = (this.stderrTail + text).slice(-4000);
     });
 
     // ---- process exit ----
@@ -98,24 +107,43 @@ export class RunProcess {
       logStream.write(`\n=== Run exited with code ${code} at ${new Date().toISOString()} ===\n`);
       logStream.end();
 
+      // Guard: if onCompleted was already called (e.g. from error handler), skip
+      if (this.completed) return;
+      this.completed = true;
+
       const exitCode = code ?? -1;
       let reason: RunReason;
       if (this.awaitingInput) {
         reason = 'ok';
+      } else if (this.timeoutOccurred) {
+        reason = 'timeout';
       } else if (this.cancelled) {
         reason = 'stopped';
       } else if (exitCode === 0) {
         reason = 'ok';
+      } else if (exitCode === 127) {
+        // 127 = command not found. Almost always the claude-sm wrapper /
+        // environment is misconfigured — not a real Claude error.
+        reason = 'config';
       } else {
         reason = 'error';
       }
 
-      this.callbacks.onCompleted(this.workId, { exitCode, reason });
+      const errorDetail =
+        reason === 'error' || reason === 'config'
+          ? this.stderrTail.trim() || undefined
+          : undefined;
+
+      this.callbacks.onCompleted(this.workId, { exitCode, reason, errorDetail });
       this.process = null;
     });
 
     // ---- process error ----
     this.process.on('error', (err: Error) => {
+      // Guard: if onCompleted was already called (e.g. from exit handler), skip
+      if (this.completed) return;
+      this.completed = true;
+
       logStream.write(`[error] ${err.message}\n`);
       clearTimeout(this.watchdogTimer!);
       rl.close();
@@ -124,6 +152,7 @@ export class RunProcess {
       this.callbacks.onCompleted(this.workId, {
         exitCode: -1,
         reason: 'error',
+        errorDetail: err.message,
       });
       this.process = null;
     });
@@ -191,12 +220,11 @@ export class RunProcess {
     if (minutes <= 0) return;
 
     this.watchdogTimer = setTimeout(() => {
-      if (this.isRunning()) {
+      if (this.isRunning() && !this.completed) {
+        this.timeoutOccurred = true;
         this.cancel();
-        this.callbacks.onCompleted(this.workId, {
-          exitCode: -1,
-          reason: 'timeout',
-        });
+        // Don't call onCompleted here — the exit handler will do it
+        // with reason='timeout' because this.timeoutOccurred is set.
       }
     }, minutes * 60 * 1000);
   }
