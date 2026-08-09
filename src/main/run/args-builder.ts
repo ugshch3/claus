@@ -17,6 +17,12 @@ export function buildArgs(
     args.push('--session-id', sessionId);
   }
 
+  // Prepend custom instructions so the model treats them as a direct directive.
+  // The fragment goes at the very start of the user message for maximum weight.
+  if (settings.customPromptFragment && settings.customPromptFragment.trim()) {
+    prompt = settings.customPromptFragment.trim() + '\n\n' + prompt;
+  }
+
   args.push('-p', prompt);
   args.push('--output-format', 'stream-json');
   args.push('--verbose');  // required for stream-json to work

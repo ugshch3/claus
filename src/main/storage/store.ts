@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS: Settings = {
   watchdogTimeoutMinutes: 10,
   defaultMaxTurns: 25,
   defaultProfile: 'generic',
+  customPromptFragment: '',
 };
 
 function getDefaultData(): AppData {

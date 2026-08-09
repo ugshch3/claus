@@ -16,6 +16,7 @@ export interface Work {
   branch: string;
   status: 'IN_PROGRESS' | 'AWAITING_INPUT' | 'COMPLETED';
   statusNote?: string;   // пометка: «бюджет», «ошибка», «остановлено»
+  lastError?: string;    // диагностика упавшего Run (хвост stderr) — показывается в UI
   currentRunPid: number | null;
   runCount: number;
   lastActiveAt: string;  // ISO 8601
@@ -27,6 +28,7 @@ export interface Settings {
   watchdogTimeoutMinutes: number;
   defaultMaxTurns: number;
   defaultProfile: string;
+  customPromptFragment: string;
 }
 
 export interface StreamEvent {
@@ -41,9 +43,12 @@ export interface AppData {
   settings: Settings;
 }
 
-export type RunReason = 'ok' | 'error' | 'timeout' | 'stopped';
+// 'config' — обёртка/окружение сломаны (напр. claude-sm вышел с кодом 127,
+// command not found). Отличаем от обычной ошибки Claude, чтобы дать понятный статус.
+export type RunReason = 'ok' | 'error' | 'timeout' | 'stopped' | 'config';
 
 export interface RunResult {
   exitCode: number;
   reason: RunReason;
+  errorDetail?: string;  // хвост stderr для reason 'error' | 'config' | 'timeout'
 }

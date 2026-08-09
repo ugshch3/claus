@@ -325,6 +325,7 @@ function bindForms() {
       watchdogTimeoutMinutes: parseInt(document.getElementById('set-watchdog').value) || 10,
       defaultMaxTurns: parseInt(document.getElementById('set-max-turns').value) || 25,
       defaultProfile: document.getElementById('set-profile').value,
+      customPromptFragment: document.getElementById('set-custom-prompt').value,
     };
     state.settings = await api.settingsUpdate(settings);
     renderSettingsForm();
@@ -538,6 +539,7 @@ function renderSettingsForm() {
   document.getElementById('set-watchdog').value = state.settings.watchdogTimeoutMinutes;
   document.getElementById('set-max-turns').value = state.settings.defaultMaxTurns;
   document.getElementById('set-profile').value = state.settings.defaultProfile;
+  document.getElementById('set-custom-prompt').value = state.settings.customPromptFragment || '';
 }
 
 // ---- IPC Events (Main → Renderer) ----
