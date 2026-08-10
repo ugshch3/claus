@@ -393,8 +393,8 @@ function bindForms() {
   document.getElementById('btn-complete-work').addEventListener('click', async () => {
     if (!state.selectedWorkId) return;
     await api.workComplete(state.selectedWorkId);
-    await loadWorks();
-    await loadActiveWorks();
+    await loadActiveWorks();  // refresh sidebar first
+    await loadWorks();        // then copy to right panel
     document.getElementById('work-detail').classList.add('hidden');
     state.selectedWorkId = null;
   });
@@ -416,8 +416,8 @@ function bindForms() {
               await api.workDelete(state.selectedWorkId);
               document.getElementById('work-detail').classList.add('hidden');
               state.selectedWorkId = null;
-              await loadWorks();
               await loadActiveWorks();
+              await loadWorks();
             } catch (err) {
               showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
                 { label: 'OK' },
@@ -730,8 +730,8 @@ function bindEvents() {
     if (workId === state.selectedWorkId) {
       document.getElementById('stream-events').innerHTML = '';
     }
-    await loadWorks();
     await loadActiveWorks();
+    await loadWorks();
     // Transition UI to IN_PROGRESS if this work is selected
     // Check status: if onRunCompleted already fired (fast exit), skip to avoid overwriting
     if (workId === state.selectedWorkId) {
@@ -759,8 +759,8 @@ function bindEvents() {
 
   api.onRunCompleted(async ({ workId, exitCode, reason }) => {
     // Refresh work data
-    await loadWorks();
     await loadActiveWorks();
+    await loadWorks();
 
     // Update detail view if selected
     if (workId === state.selectedWorkId) {
@@ -770,8 +770,8 @@ function bindEvents() {
   });
 
   api.onWorkUpdated(async ({ work }) => {
-    await loadWorks();
     await loadActiveWorks();
+    await loadWorks();
     if (work.id === state.selectedWorkId) {
       const { work: w, lastResult } = await api.workGet(work.id);
       renderWorkDetail(w, lastResult);
