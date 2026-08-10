@@ -5,11 +5,13 @@
 const state = {
   projects: [],
   works: [],
+  activeWorks: [],      // all non-COMPLETED works for sidebar
   selectedProjectId: null,
   selectedWorkId: null,
   activeRuns: {},      // workId → { events: [] }
   settings: {},
   currentView: 'works', // 'works' | 'project-create' | 'settings'
+  viewingActive: false, // true when "Active Works" is selected in sidebar
 };
 
 // ---- API helpers ----
@@ -125,6 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load data; failures are non-fatal
   try { await loadProjects(); } catch (e) { console.error('loadProjects failed:', e); }
+  try { await loadActiveWorks(); } catch (e) { console.error('loadActiveWorks failed:', e); }
   try { await loadSettings(); } catch (e) { console.error('loadSettings failed:', e); }
 
   showView('works');
@@ -146,6 +149,35 @@ async function loadWorks() {
 async function loadSettings() {
   state.settings = await api.settingsGet();
   renderSettingsForm();
+}
+
+async function loadActiveWorks() {
+  const all = await api.workList();
+  state.activeWorks = all.filter(w => w.status !== 'COMPLETED');
+  renderActiveWorksSidebar();
+}
+
+function renderActiveWorksSidebar() {
+  const list = document.getElementById('active-works-list');
+  list.innerHTML = '';
+
+  if (state.activeWorks.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No active works';
+    list.appendChild(empty);
+    return;
+  }
+
+  state.activeWorks.forEach(w => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = workDisplayName(w);
+    li.appendChild(name);
+    li.appendChild(renderStatusBadge(w.status, w.statusNote));
+    li.addEventListener('click', () => selectWork(w.id));
+    list.appendChild(li);
+  });
 }
 
 // ---- Navigation ----
@@ -634,6 +666,7 @@ function bindEvents() {
       document.getElementById('stream-events').innerHTML = '';
     }
     await loadWorks();
+    await loadActiveWorks();
     // Transition UI to IN_PROGRESS if this work is selected
     // Check status: if onRunCompleted already fired (fast exit), skip to avoid overwriting
     if (workId === state.selectedWorkId) {
@@ -662,6 +695,7 @@ function bindEvents() {
   api.onRunCompleted(async ({ workId, exitCode, reason }) => {
     // Refresh work data
     await loadWorks();
+    await loadActiveWorks();
 
     // Update detail view if selected
     if (workId === state.selectedWorkId) {
@@ -672,6 +706,7 @@ function bindEvents() {
 
   api.onWorkUpdated(async ({ work }) => {
     await loadWorks();
+    await loadActiveWorks();
     if (work.id === state.selectedWorkId) {
       const { work: w, lastResult } = await api.workGet(work.id);
       renderWorkDetail(w, lastResult);
