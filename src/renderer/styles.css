@@ -105,6 +105,28 @@ button.danger:hover { background: #6a2a2a; }
 /* ---- Work List ---- */
 #works-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 #works-path { font-size: 12px; color: #666; margin-top: 2px; font-family: monospace; }
+#works-header-actions { display: flex; align-items: center; gap: 12px; }
+
+/* ---- UI Toggle (segmented control) ---- */
+#ui-toggle { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #3a3a5a; }
+#ui-toggle button {
+  padding: 5px 14px; border: none; border-radius: 0; cursor: pointer;
+  font-size: 12px; background: #1a1a30; color: #777; transition: all .15s;
+}
+#ui-toggle button:first-child { border-right: 1px solid #3a3a5a; }
+#ui-toggle button:hover { background: #2a2a4a; color: #bbb; }
+#ui-toggle button.active { background: #3a3a6a; color: #fff; }
+
+/* ---- New UI Placeholder ---- */
+#new-ui-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; text-align: center; color: #555; padding: 64px 32px;
+}
+#new-ui-placeholder .placeholder-icon { font-size: 48px; margin-bottom: 16px; }
+#new-ui-placeholder h2 { font-size: 24px; color: #777; margin-bottom: 8px; }
+#new-ui-placeholder p { font-size: 14px; line-height: 1.5; }
+#new-ui-placeholder strong { color: #999; }
+
 #work-list { list-style: none; }
 #work-list li {
   padding: 10px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;

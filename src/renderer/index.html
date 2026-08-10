@@ -54,7 +54,13 @@
             <h2 id="works-title">Select a project</h2>
             <div id="works-path"></div>
           </div>
-          <button id="btn-new-work" class="hidden">+ New Work</button>
+          <div id="works-header-actions">
+            <div id="ui-toggle">
+              <button id="ui-toggle-classic" data-mode="classic">Classic</button>
+              <button id="ui-toggle-new" data-mode="new">New</button>
+            </div>
+            <button id="btn-new-work" class="hidden">+ New Work</button>
+          </div>
         </div>
 
         <!-- Work Create Form (hidden) -->
@@ -114,6 +120,15 @@
             <button id="btn-cancel-run" class="danger hidden">Stop Run</button>
             <button id="btn-delete-work" class="danger hidden">Delete Work</button>
           </div>
+        </div>
+      </div>
+
+      <!-- New UI Placeholder -->
+      <div id="view-new-ui" class="view hidden">
+        <div id="new-ui-placeholder">
+          <div class="placeholder-icon">✨</div>
+          <h2>New UI</h2>
+          <p>Coming soon. Switch back to <strong>Classic</strong> using the toggle above.</p>
         </div>
       </div>
 
