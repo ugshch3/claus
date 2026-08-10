@@ -452,11 +452,13 @@ function renderWorkDetail(work, lastResult) {
   const runProgress = document.getElementById('run-progress');
   const awaitingInput = document.getElementById('awaiting-input');
   const cancelBtn = document.getElementById('btn-cancel-run');
+  const deleteBtn = document.getElementById('btn-delete-work');
 
   if (work.status === 'IN_PROGRESS') {
     runProgress.classList.remove('hidden');
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.remove('hidden');
+    deleteBtn.classList.add('hidden');
     // Show existing events if we have them
     renderStreamEvents(work.id);
   } else if (work.status === 'AWAITING_INPUT') {
@@ -464,6 +466,7 @@ function renderWorkDetail(work, lastResult) {
     awaitingInput.classList.remove('hidden');
     document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
+    deleteBtn.classList.add('hidden');
     const resultEl = document.getElementById('last-result');
     if (work.lastError) {
       // Run failed (e.g. exit 127 — wrapper misconfigured): surface stderr
@@ -480,6 +483,7 @@ function renderWorkDetail(work, lastResult) {
     runProgress.classList.add('hidden');
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.add('hidden');
+    deleteBtn.classList.remove('hidden');
     if (lastResult) {
       document.getElementById('awaiting-input').classList.remove('hidden');
       document.getElementById('last-result').textContent = lastResult;
