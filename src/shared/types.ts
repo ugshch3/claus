@@ -30,6 +30,7 @@ export interface Settings {
   defaultMaxTurns: number;
   defaultProfile: string;
   customPromptFragment: string;
+  uiMode: 'classic' | 'new';
 }
 
 export interface StreamEvent {
