@@ -8,6 +8,7 @@ import {
   createProject,
 } from '../project/project-manager';
 import { getCurrentBranch } from '../git/git-service';
+import { sync as syncClaudeConfig } from '../claude/claude-config';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -34,6 +35,8 @@ export function createWork(params: {
       const name = path.basename(resolvedDir);
       const uniqueName = generateUniqueName(name);
       project = createProject({ name: uniqueName, path: resolvedDir, profile: 'generic' });
+      // Set up Claude Code permissions for the new project
+      syncClaudeConfig(project.path, 'generic');
     }
     projectId = project.id;
   }
