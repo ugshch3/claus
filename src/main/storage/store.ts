@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultMaxTurns: 25,
   defaultProfile: 'generic',
   customPromptFragment: '',
+  uiMode: 'classic',
 };
 
 function getDefaultData(): AppData {
