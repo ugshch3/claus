@@ -10,8 +10,9 @@ const state = {
   selectedWorkId: null,
   activeRuns: {},      // workId → { events: [] }
   settings: {},
-  currentView: 'works', // 'works' | 'project-create' | 'settings'
+  currentView: 'works', // 'works' | 'project-create' | 'settings' | 'new-ui'
   viewingActive: false, // true when "Active Works" is selected in sidebar
+  uiMode: 'classic',    // 'classic' | 'new'
 };
 
 // ---- API helpers ----
@@ -127,13 +128,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindNavigation();
   bindForms();
   bindEvents();
+  bindUIToggle();
 
   // Load data; failures are non-fatal
   try { await loadProjects(); } catch (e) { console.error('loadProjects failed:', e); }
   try { await loadActiveWorks(); } catch (e) { console.error('loadActiveWorks failed:', e); }
   try { await loadSettings(); } catch (e) { console.error('loadSettings failed:', e); }
 
-  showView('works');
+  // Apply persisted UI mode
+  applyUIMode();
 });
 
 // ---- Data loading ----
@@ -233,6 +236,48 @@ function showView(name) {
     document.getElementById('view-project-create').classList.remove('hidden');
   } else if (name === 'settings') {
     document.getElementById('view-settings').classList.remove('hidden');
+  } else if (name === 'new-ui') {
+    document.getElementById('view-new-ui').classList.remove('hidden');
+  }
+}
+
+// ---- UI Toggle ----
+function bindUIToggle() {
+  document.getElementById('ui-toggle-classic').addEventListener('click', () => switchUIMode('classic'));
+  document.getElementById('ui-toggle-new').addEventListener('click', () => switchUIMode('new'));
+}
+
+function renderUIToggle(mode) {
+  const classicBtn = document.getElementById('ui-toggle-classic');
+  const newBtn = document.getElementById('ui-toggle-new');
+  classicBtn.classList.toggle('active', mode === 'classic');
+  newBtn.classList.toggle('active', mode === 'new');
+}
+
+async function switchUIMode(mode) {
+  if (state.uiMode === mode) return;
+  state.uiMode = mode;
+  renderUIToggle(mode);
+  try {
+    await api.settingsUpdate({ uiMode: mode });
+  } catch (e) {
+    console.error('Failed to persist uiMode:', e);
+  }
+  if (mode === 'new') {
+    showView('new-ui');
+  } else {
+    showView('works');
+  }
+}
+
+function applyUIMode() {
+  const mode = state.settings.uiMode || 'classic';
+  state.uiMode = mode;
+  renderUIToggle(mode);
+  if (mode === 'new') {
+    showView('new-ui');
+  } else {
+    showView('works');
   }
 }
 
