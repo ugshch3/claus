@@ -11,8 +11,9 @@ import { registerWorkHandlers, WorkHandlerDeps } from './handlers/work';
 import { registerSettingsHandlers } from './handlers/settings';
 import { logInfo, logError, logWarn } from '../utils/logger';
 import {
-  backupLocalSettings,
-  writeLocalSettings,
+  acquireLocalSettings,
+  releaseLocalSettings,
+  releaseAllLocalSettings,
   restoreLocalSettings,
 } from '../claude/claude-config';
 
@@ -55,6 +56,8 @@ export function shutdownAllRuns(): void {
     }
   }
   activeRuns.clear();
+  // Restore every project's original settings.local.json regardless of active count
+  releaseAllLocalSettings();
 }
 
 /**
@@ -116,9 +119,9 @@ function spawnRun(workId: string, prompt: string): void {
 
   const args = buildArgs(workId, prompt, settings, isResume);
 
-  // Replace user's settings.local.json with our permissions for the duration of this run
-  backupLocalSettings(project.path);
-  writeLocalSettings(project.path);
+  // Replace user's settings.local.json with our permissions for the duration of this run.
+  // Ref-counted: only the first concurrent run backs up, only the last one restores.
+  acquireLocalSettings(project.path);
 
   const rp = new RunProcess(
     {
@@ -151,7 +154,7 @@ function spawnRun(workId: string, prompt: string): void {
         }
         markRunCompleted(workId, NOTE[result.reason], result.errorDetail);
         activeRuns.delete(workId);
-        restoreLocalSettings(project.path);
+        releaseLocalSettings(project.path);
         mainWindow.webContents.send(EVENTS.RUN_COMPLETED, {
           workId,
           exitCode: result.exitCode,
@@ -179,7 +182,7 @@ function cancelRun(workId: string): void {
   if (work) {
     const project = getProject(work.projectId);
     if (project) {
-      restoreLocalSettings(project.path);
+      releaseLocalSettings(project.path);
     }
   }
 }

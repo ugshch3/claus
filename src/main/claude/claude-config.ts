@@ -142,23 +142,54 @@ function generateLocalSettingsJson(): string {
 
 const LOCAL_BACKUP_SUFFIX = '.backup';
 
+// Reference count of active runs per project directory.
+// Ensures settings.local.json is only restored when the LAST run in a project finishes.
+const projectRunCount = new Map<string, number>();
+
 /**
- * Backup user's settings.local.json before a Work run, so our permissions take effect.
- * Idempotent: only backs up if the file exists AND no backup already present.
+ * Acquire local settings for a run. Backs up the user's original
+ * settings.local.json (if present) on the first active run, then writes
+ * our permissive settings. Safe to call concurrently — only the first
+ * call creates a backup, only the last matching release() restores it.
  */
-export function backupLocalSettings(projectPath: string): void {
-  const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
-  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
-
-  if (!fs.existsSync(localSettings)) return; // nothing to back up
-  if (fs.existsSync(backupFile)) return;      // already backed up (e.g. another active Work)
-
-  fs.copyFileSync(localSettings, backupFile);
+export function acquireLocalSettings(projectPath: string): void {
+  const count = projectRunCount.get(projectPath) || 0;
+  if (count === 0) {
+    backupLocalSettings(projectPath);
+  }
+  projectRunCount.set(projectPath, count + 1);
+  writeLocalSettings(projectPath);
 }
 
 /**
- * Restore user's settings.local.json after a Work run completes.
- * If no backup exists, removes our settings (user had no local settings before the run).
+ * Release local settings after a run finishes. Restores the user's
+ * original settings.local.json only when no other runs remain active
+ * in the same project directory.
+ */
+export function releaseLocalSettings(projectPath: string): void {
+  const count = projectRunCount.get(projectPath);
+  if (count === undefined || count <= 1) {
+    projectRunCount.delete(projectPath);
+    restoreLocalSettings(projectPath);
+  } else {
+    projectRunCount.set(projectPath, count - 1);
+  }
+}
+
+/**
+ * Release all local settings — used on app shutdown to restore every
+ * project's original settings.local.json regardless of active run count.
+ */
+export function releaseAllLocalSettings(): void {
+  for (const [projectPath] of projectRunCount) {
+    restoreLocalSettings(projectPath);
+  }
+  projectRunCount.clear();
+}
+
+/**
+ * Restore user's settings.local.json from backup. Exported for crash
+ * recovery (recoverStaleWorks) where in-memory counters are lost.
  */
 export function restoreLocalSettings(projectPath: string): void {
   const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
@@ -172,10 +203,19 @@ export function restoreLocalSettings(projectPath: string): void {
   // Leave our file in place — it's harmless and ensures permissions until next sync.
 }
 
-/**
- * Write our permissions to settings.local.json for the duration of a Work run.
- */
-export function writeLocalSettings(projectPath: string): void {
+// ---- Internal ----
+
+function backupLocalSettings(projectPath: string): void {
+  const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
+  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
+
+  if (!fs.existsSync(localSettings)) return; // nothing to back up
+  if (fs.existsSync(backupFile)) return;      // already backed up
+
+  fs.copyFileSync(localSettings, backupFile);
+}
+
+function writeLocalSettings(projectPath: string): void {
   const claudeDir = path.join(projectPath, '.claude');
   if (!fs.existsSync(claudeDir)) {
     fs.mkdirSync(claudeDir, { recursive: true });
