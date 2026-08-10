@@ -56,6 +56,16 @@ body {
 #active-works-list .empty-state {
   font-size: 11px; color: #555; padding: 8px 0; text-align: left;
 }
+.active-work-info {
+  flex: 1; min-width: 0; overflow: hidden;
+}
+.active-work-name {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.active-work-dir {
+  display: block; font-size: 10px; color: #666;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px;
+}
 
 /* ---- Main ---- */
 #main {

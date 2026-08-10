@@ -178,9 +178,22 @@ function renderActiveWorksSidebar() {
 
   state.activeWorks.forEach(w => {
     const li = document.createElement('li');
+
+    const info = document.createElement('div');
+    info.className = 'active-work-info';
+
     const name = document.createElement('span');
+    name.className = 'active-work-name';
     name.textContent = workDisplayName(w);
-    li.appendChild(name);
+
+    const project = state.projects.find(p => p.id === w.projectId);
+    const dir = document.createElement('span');
+    dir.className = 'active-work-dir';
+    dir.textContent = project?.name || project?.path || w.projectId;
+
+    info.appendChild(name);
+    info.appendChild(dir);
+    li.appendChild(info);
     li.appendChild(renderStatusBadge(w.status, w.statusNote));
     li.addEventListener('click', () => selectWork(w.id));
     list.appendChild(li);
