@@ -325,11 +325,19 @@ function bindForms() {
   document.getElementById('btn-new-work').addEventListener('click', () => {
     document.getElementById('work-detail').classList.add('hidden');
     document.getElementById('work-create-form').classList.remove('hidden');
+    // Show directory field only when creating from Active Works (no project selected)
+    const dirLabel = document.getElementById('work-dir-label');
+    if (state.viewingActive && !state.selectedProjectId) {
+      dirLabel.classList.remove('hidden');
+    } else {
+      dirLabel.classList.add('hidden');
+    }
   });
 
   document.getElementById('btn-cancel-work').addEventListener('click', () => {
     document.getElementById('work-create-form').classList.add('hidden');
     document.getElementById('form-work-create').reset();
+    document.getElementById('work-dir-label').classList.add('hidden');
   });
 
   // Work Create form
