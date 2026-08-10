@@ -404,6 +404,7 @@ function bindForms() {
               document.getElementById('work-detail').classList.add('hidden');
               state.selectedWorkId = null;
               await loadWorks();
+              await loadActiveWorks();
             } catch (err) {
               showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
                 { label: 'OK' },
