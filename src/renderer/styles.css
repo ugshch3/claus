@@ -34,6 +34,29 @@ body {
 .project-delete:hover { color: #f44; }
 #sidebar-footer { padding-top: 12px; border-top: 1px solid #2a2a4a; }
 
+/* ---- Active Works Sidebar ---- */
+#active-works-section {
+  padding-top: 10px; border-top: 1px solid #2a2a4a; margin-top: 8px;
+}
+#active-works-header {
+  cursor: pointer; padding: 2px 0;
+  transition: color .15s;
+}
+#active-works-header:hover { color: #bbb; }
+#active-works-header.active { color: #fff; }
+#active-works-list {
+  list-style: none; overflow-y: auto; max-height: 180px;
+}
+#active-works-list li {
+  padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  margin-bottom: 1px; transition: background .15s; display: flex;
+  justify-content: space-between; align-items: center;
+}
+#active-works-list li:hover { background: #1e1e3a; }
+#active-works-list .empty-state {
+  font-size: 11px; color: #555; padding: 8px 0; text-align: left;
+}
+
 /* ---- Main ---- */
 #main {
   flex: 1; overflow-y: auto; padding: 24px 32px;
