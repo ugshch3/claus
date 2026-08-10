@@ -97,6 +97,9 @@ async function submitWorkCreate(params) {
     const work = await api.workCreate(params);
     document.getElementById('work-create-form').classList.add('hidden');
     document.getElementById('form-work-create').reset();
+    document.getElementById('work-dir-label').classList.add('hidden');
+    await loadProjects();     // may have auto-created a project
+    await loadActiveWorks();  // refresh sidebar
     await loadWorks();
     await selectWork(work.id);
   } catch (err) {
@@ -347,7 +350,14 @@ function bindForms() {
     const description = document.getElementById('work-desc').value.trim();
     if (!name || !description) return;
 
-    await submitWorkCreate({ projectId: state.selectedProjectId, name, description });
+    const params = { name, description };
+    const directory = document.getElementById('work-dir').value.trim();
+    if (directory) {
+      params.directory = directory;
+    } else if (state.selectedProjectId) {
+      params.projectId = state.selectedProjectId;
+    }
+    await submitWorkCreate(params);
   });
 
   // Work respond form
@@ -371,6 +381,7 @@ function bindForms() {
     if (!state.selectedWorkId) return;
     await api.workComplete(state.selectedWorkId);
     await loadWorks();
+    await loadActiveWorks();
     document.getElementById('work-detail').classList.add('hidden');
     state.selectedWorkId = null;
   });
