@@ -313,6 +313,36 @@ function bindForms() {
     state.selectedWorkId = null;
   });
 
+  // Delete work
+  document.getElementById('btn-delete-work').addEventListener('click', () => {
+    if (!state.selectedWorkId) return;
+    const work = state.works.find(w => w.id === state.selectedWorkId);
+    const name = work ? workDisplayName(work) : 'this work';
+    showDialog(
+      'Delete Work',
+      `<p>Delete <strong>${escapeHTML(name)}</strong>?</p><p>The work and its session data will be permanently removed. This action cannot be undone.</p>`,
+      [
+        {
+          label: 'Delete',
+          cls: 'danger',
+          onClick: async () => {
+            try {
+              await api.workDelete(state.selectedWorkId);
+              document.getElementById('work-detail').classList.add('hidden');
+              state.selectedWorkId = null;
+              await loadWorks();
+            } catch (err) {
+              showDialog('Error', `<p>${escapeHTML(err.userMessage || err.message || String(err))}</p>`, [
+                { label: 'OK' },
+              ]);
+            }
+          },
+        },
+        { label: 'Cancel' },
+      ]
+    );
+  });
+
   // Cancel run
   document.getElementById('btn-cancel-run').addEventListener('click', async () => {
     if (!state.selectedWorkId) return;
