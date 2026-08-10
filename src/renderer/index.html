@@ -26,6 +26,14 @@
 
     <!-- Main content -->
     <main id="main">
+      <!-- Global UI toggle (always visible) -->
+      <div id="ui-toggle-bar">
+        <div id="ui-toggle">
+          <button id="ui-toggle-classic" data-mode="classic">Classic</button>
+          <button id="ui-toggle-new" data-mode="new">New</button>
+        </div>
+      </div>
+
       <!-- Project Create Form (hidden by default) -->
       <div id="view-project-create" class="view hidden">
         <h2>New Project</h2>
@@ -55,10 +63,6 @@
             <div id="works-path"></div>
           </div>
           <div id="works-header-actions">
-            <div id="ui-toggle">
-              <button id="ui-toggle-classic" data-mode="classic">Classic</button>
-              <button id="ui-toggle-new" data-mode="new">New</button>
-            </div>
             <button id="btn-new-work" class="hidden">+ New Work</button>
           </div>
         </div>
