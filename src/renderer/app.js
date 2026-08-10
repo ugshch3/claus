@@ -140,9 +140,13 @@ async function loadProjects() {
 }
 
 async function loadWorks() {
-  state.works = state.selectedProjectId
-    ? await api.workList(state.selectedProjectId)
-    : [];
+  if (state.viewingActive) {
+    state.works = state.activeWorks;
+  } else if (state.selectedProjectId) {
+    state.works = await api.workList(state.selectedProjectId);
+  } else {
+    state.works = [];
+  }
   renderWorkList();
 }
 
@@ -180,12 +184,28 @@ function renderActiveWorksSidebar() {
   });
 }
 
+function selectActiveWorks() {
+  state.viewingActive = true;
+  state.selectedProjectId = null;
+  state.selectedWorkId = null;
+  renderProjectList();
+  document.getElementById('active-works-header').classList.add('active');
+  document.getElementById('works-title').textContent = 'Active Works';
+  document.getElementById('works-path').textContent = '';
+  document.getElementById('btn-new-work').classList.remove('hidden');
+  document.getElementById('work-detail').classList.add('hidden');
+  document.getElementById('work-create-form').classList.add('hidden');
+  loadWorks();
+  showView('works');
+}
+
 // ---- Navigation ----
 function bindNavigation() {
   document.getElementById('btn-new-project').addEventListener('click', () => showView('project-create'));
   document.getElementById('btn-settings').addEventListener('click', () => showView('settings'));
   document.getElementById('btn-cancel-project').addEventListener('click', () => showView('works'));
   document.getElementById('btn-cancel-settings').addEventListener('click', () => showView('works'));
+  document.getElementById('active-works-header').addEventListener('click', () => selectActiveWorks());
 }
 
 function showView(name) {
@@ -231,6 +251,8 @@ function renderProjectList() {
 async function selectProject(id) {
   state.selectedProjectId = id;
   state.selectedWorkId = null;
+  state.viewingActive = false;
+  document.getElementById('active-works-header').classList.remove('active');
   renderProjectList();
   const project = state.projects.find(p => p.id === id);
   document.getElementById('works-title').textContent =
