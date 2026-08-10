@@ -32,7 +32,7 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_CREATE,
     async (
       _event,
-      params: { projectId: string; name?: string; description: string }
+      params: { projectId?: string; name?: string; description: string; directory?: string }
     ) => {
       const work = createWork(params);
       // Spawn the first run with the work description
