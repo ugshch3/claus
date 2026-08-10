@@ -38,6 +38,13 @@ export function listProjects(): Project[] {
   return load().projects;
 }
 
+/** Find a project whose resolved path matches the given rawPath. */
+export function findProjectByPath(rawPath: string): Project | undefined {
+  const data = load();
+  const resolvedPath = resolvePath(rawPath);
+  return data.projects.find(p => resolvePath(p.path) === resolvedPath);
+}
+
 export function getProject(id: string): Project | undefined {
   return load().projects.find(p => p.id === id);
 }
