@@ -366,10 +366,11 @@ function bindForms() {
     const name = document.getElementById('proj-name').value.trim();
     const path = document.getElementById('proj-path').value.trim();
     const profile = document.getElementById('proj-profile').value;
+    const initRepo = document.getElementById('proj-init-repo').checked;
     if (!name || !path) return;
 
     try {
-      await api.projectCreate({ name, path, profile });
+      await api.projectCreate({ name, path, profile, initRepo });
       document.getElementById('form-project-create').reset();
       await loadProjects();
       showView('works');
