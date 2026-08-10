@@ -1,7 +1,12 @@
 import * as crypto from 'crypto';
 import { Work } from '../../shared/types';
 import { load, save } from '../storage/store';
-import { getProject } from '../project/project-manager';
+import {
+  getProject,
+  findProjectByPath,
+  generateUniqueName,
+  createProject,
+} from '../project/project-manager';
 import { getCurrentBranch } from '../git/git-service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,16 +15,40 @@ import * as os from 'os';
 // ---- Public API ----
 
 export function createWork(params: {
-  projectId: string;
+  projectId?: string;
   name?: string;
   description: string;
+  directory?: string;
 }): Work {
+  let projectId = params.projectId;
+
+  // If directory is provided, find or auto-create the project
+  if (params.directory) {
+    const resolvedDir = resolveDir(params.directory);
+    if (!fs.existsSync(resolvedDir)) {
+      throw new Error(`Directory not found: ${params.directory}`);
+    }
+
+    let project = findProjectByPath(params.directory);
+    if (!project) {
+      const name = path.basename(resolvedDir);
+      const uniqueName = generateUniqueName(name);
+      project = createProject({ name: uniqueName, path: resolvedDir, profile: 'generic' });
+    }
+    projectId = project.id;
+  }
+
+  if (!projectId) {
+    throw new Error('projectId or directory is required');
+  }
+
+  // Reload data — createProject may have modified the store
   const data = load();
 
   // Validate project exists
-  const project = data.projects.find(p => p.id === params.projectId);
+  const project = data.projects.find(p => p.id === projectId);
   if (!project) {
-    throw new Error(`Проект с id '${params.projectId}' не найден`);
+    throw new Error(`Проект с id '${projectId}' не найден`);
   }
 
   // Record current branch (Claude Code decides whether to switch)
@@ -27,14 +56,14 @@ export function createWork(params: {
   try {
     currentBranch = getCurrentBranch(project.path);
   } catch {
-    // Not a git repo — leave empty
+    // Not a git repo — leave empty; git checks are skipped downstream
   }
 
   // Create work
   const now = new Date().toISOString();
   const work: Work = {
     id: crypto.randomUUID(),
-    projectId: params.projectId,
+    projectId,
     name: params.name || undefined,
     description: params.description,
     branch: currentBranch,
@@ -244,4 +273,11 @@ function updateWork(
 
 function slugifyPath(absPath: string): string {
   return absPath.replace(/[^a-zA-Z0-9]/g, '-');
+}
+
+function resolveDir(rawPath: string): string {
+  if (rawPath.startsWith('~')) {
+    return path.join(os.homedir(), rawPath.slice(1));
+  }
+  return path.resolve(rawPath);
 }
