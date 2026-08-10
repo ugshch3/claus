@@ -51,7 +51,7 @@ jq -n --arg d "$DECISION" '{
 function generateSettingsJson(): string {
   const settings = {
     permissions: {
-      allow: ['Read', 'Glob', 'Grep', 'Edit', 'Write'],
+      allow: ['mcp__*', 'Read', 'Glob', 'Grep', 'Edit', 'Write'],
       deny: [
         'Read(.env*)',
         'Bash(rm -rf *)',
@@ -121,7 +121,7 @@ export function sync(projectPath: string, profile: Profile): void {
 function generateLocalSettingsJson(): string {
   const settings = {
     permissions: {
-      allow: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'],
+      allow: ['mcp__*', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'],
     },
     hooks: {
       PreToolUse: [
