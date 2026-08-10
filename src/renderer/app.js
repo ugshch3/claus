@@ -499,7 +499,11 @@ function renderWorkList() {
   if (state.works.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = state.selectedProjectId ? 'No works yet. Create one!' : 'Select a project to see works.';
+    empty.textContent = state.viewingActive
+      ? 'No active works across projects.'
+      : state.selectedProjectId
+        ? 'No works yet. Create one!'
+        : 'Select a project to see works.';
     list.appendChild(empty);
     return;
   }
@@ -518,7 +522,13 @@ function renderWorkList() {
     const meta = document.createElement('div');
     meta.className = 'work-item-meta';
     const date = new Date(w.lastActiveAt).toLocaleString();
-    meta.textContent = `Branch: ${w.branch} · Runs: ${w.runCount} · ${date}`;
+    const project = state.projects.find(p => p.id === w.projectId);
+    const projectLabel = project?.name || project?.path || '';
+    const parts = [`Branch: ${w.branch}`, `Runs: ${w.runCount}`, date];
+    if (state.viewingActive && projectLabel) {
+      parts.unshift(projectLabel);
+    }
+    meta.textContent = parts.join(' · ');
 
     main.appendChild(desc);
     main.appendChild(meta);
