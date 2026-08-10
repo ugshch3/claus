@@ -165,3 +165,15 @@ export function getRemotes(projectPath: string): string[] {
     return [];
   }
 }
+
+export function initRepo(projectPath: string): void {
+  try {
+    git(projectPath, 'init');
+  } catch (err: any) {
+    throw new GitError(
+      'INIT_ERROR',
+      `Не удалось инициализировать git-репозиторий: ${err.userMessage || err.message}`,
+      err.message
+    );
+  }
+}
