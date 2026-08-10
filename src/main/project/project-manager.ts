@@ -45,6 +45,18 @@ export function findProjectByPath(rawPath: string): Project | undefined {
   return data.projects.find(p => resolvePath(p.path) === resolvedPath);
 }
 
+/** Generate a unique project name. If baseName is taken, append -1, -2, ... */
+export function generateUniqueName(baseName: string): string {
+  const data = load();
+  const names = new Set(data.projects.map(p => p.name));
+  if (!names.has(baseName)) return baseName;
+  let i = 1;
+  while (names.has(`${baseName}-${i}`)) {
+    i++;
+  }
+  return `${baseName}-${i}`;
+}
+
 export function getProject(id: string): Project | undefined {
   return load().projects.find(p => p.id === id);
 }
