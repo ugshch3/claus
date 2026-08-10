@@ -20,7 +20,7 @@ export function registerProjectHandlers(): void {
 
   ipcMain.handle(
     IPC.PROJECT_CREATE,
-    async (_event, params: { name: string; path: string; profile?: Profile }) => {
+    async (_event, params: { name: string; path: string; profile?: Profile; initRepo?: boolean }) => {
       const project = createProject(params);
       // Set up Claude Code config for the project
       syncClaudeConfig(project.path, project.profile);

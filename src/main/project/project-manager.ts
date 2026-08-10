@@ -1,19 +1,27 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Project } from '../../shared/types';
 import { load, save } from '../storage/store';
 import { Profile } from '../claude/claude-config';
+import { initRepo } from '../git/git-service';
 
 export function createProject(params: {
   name: string;
   path: string;
   profile?: Profile;
+  initRepo?: boolean;
 }): Project {
   const data = load();
 
   // Resolve ~ and relative paths to absolute
   const resolvedPath = resolvePath(params.path);
+
+  // Handle git init before project creation
+  if (params.initRepo) {
+    ensureDirectoryForInit(resolvedPath);
+  }
 
   // Check path uniqueness (compare resolved paths)
   if (data.projects.some(p => resolvePath(p.path) === resolvedPath)) {
@@ -96,4 +104,31 @@ function resolvePath(rawPath: string): string {
     return path.join(os.homedir(), rawPath.slice(1));
   }
   return path.resolve(rawPath);
+}
+
+/**
+ * Ensure directory exists and run git init if not already a repo.
+ * Called only when initRepo flag is set.
+ */
+function ensureDirectoryForInit(resolvedPath: string): void {
+  // Check if path points to a file
+  if (fs.existsSync(resolvedPath) && !fs.statSync(resolvedPath).isDirectory()) {
+    throw new Error(`Путь указывает на файл, а не директорию: ${resolvedPath}`);
+  }
+
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(resolvedPath)) {
+    try {
+      fs.mkdirSync(resolvedPath, { recursive: true });
+    } catch (err: any) {
+      throw new Error(`Не удалось создать директорию '${resolvedPath}': ${err.message}`);
+    }
+  }
+
+  // Skip init if already a git repository
+  if (fs.existsSync(path.join(resolvedPath, '.git'))) {
+    return;
+  }
+
+  initRepo(resolvedPath);
 }
