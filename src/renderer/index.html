@@ -57,6 +57,7 @@
         <div id="work-create-form" class="hidden form-card">
           <h3>New Work</h3>
           <form id="form-work-create">
+            <label>Name <input type="text" id="work-name" placeholder="Short name for this work" required></label>
             <label>Description <textarea id="work-desc" rows="3" required></textarea></label>
             <div class="form-actions">
               <button type="submit">Create & Run</button>
@@ -71,7 +72,15 @@
         <!-- Work Detail (shown when a work is selected) -->
         <div id="work-detail" class="hidden">
           <div id="work-detail-header">
-            <h3 id="work-detail-title"></h3>
+            <div id="work-detail-title-row">
+              <h3 id="work-detail-title"></h3>
+              <button id="btn-rename-work" class="icon-btn" title="Rename work">✏️</button>
+            </div>
+            <div id="work-detail-rename" class="hidden">
+              <input type="text" id="rename-input">
+              <button id="btn-rename-save">Save</button>
+              <button id="btn-rename-cancel">Cancel</button>
+            </div>
             <span id="work-detail-status"></span>
           </div>
           <div id="work-detail-meta">

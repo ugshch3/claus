@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import {
   createWork, listWorks, getWork, getLastResult,
-  completeWork, deleteWork, markRunStarted, markRunCompleted,
+  completeWork, deleteWork, markRunStarted, markRunCompleted, renameWork,
 } from '../../work/work-manager';
 import { getProject } from '../../project/project-manager';
 import { IPC } from '../../../shared/ipc-channels';
@@ -32,7 +32,7 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_CREATE,
     async (
       _event,
-      params: { projectId: string; description: string }
+      params: { projectId: string; name?: string; description: string }
     ) => {
       const work = createWork(params);
       // Spawn the first run with the work description
@@ -72,4 +72,11 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
 
     deps.spawnRun(id, work.description);  // re-use original description
   });
+
+  ipcMain.handle(
+    IPC.WORK_RENAME,
+    async (_event, { id, name }: { id: string; name: string }) => {
+      renameWork(id, name);
+    }
+  );
 }

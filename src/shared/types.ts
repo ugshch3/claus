@@ -12,6 +12,7 @@ export interface Project {
 export interface Work {
   id: string;            // session_id UUID
   projectId: string;
+  name?: string;         // user-defined short name; falls back to description if unset
   description: string;
   branch: string;
   status: 'IN_PROGRESS' | 'AWAITING_INPUT' | 'COMPLETED';

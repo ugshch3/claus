@@ -11,6 +11,7 @@ import * as os from 'os';
 
 export function createWork(params: {
   projectId: string;
+  name?: string;
   description: string;
 }): Work {
   const data = load();
@@ -19,14 +20,6 @@ export function createWork(params: {
   const project = data.projects.find(p => p.id === params.projectId);
   if (!project) {
     throw new Error(`Проект с id '${params.projectId}' не найден`);
-  }
-
-  // Check no active run in this project
-  const activeRun = data.works.some(
-    w => w.projectId === params.projectId && w.status === 'IN_PROGRESS'
-  );
-  if (activeRun) {
-    throw new Error('В проекте уже есть выполняющийся Work');
   }
 
   // Record current branch (Claude Code decides whether to switch)
@@ -42,6 +35,7 @@ export function createWork(params: {
   const work: Work = {
     id: crypto.randomUUID(),
     projectId: params.projectId,
+    name: params.name || undefined,
     description: params.description,
     branch: currentBranch,
     status: 'IN_PROGRESS',
@@ -143,10 +137,15 @@ export function markRunStarted(workId: string, pid: number): void {
     work.status = 'IN_PROGRESS';
     work.currentRunPid = pid;
     work.lastActiveAt = new Date().toISOString();
+    delete work.lastError;   // clear stale failure from a previous run
   });
 }
 
-export function markRunCompleted(workId: string, statusNote?: string): void {
+export function markRunCompleted(
+  workId: string,
+  statusNote?: string,
+  errorDetail?: string
+): void {
   updateWork(workId, work => {
     work.status = 'AWAITING_INPUT';
     work.currentRunPid = null;
@@ -154,6 +153,13 @@ export function markRunCompleted(workId: string, statusNote?: string): void {
     work.lastActiveAt = new Date().toISOString();
     if (statusNote) {
       work.statusNote = statusNote;
+    } else {
+      delete work.statusNote;
+    }
+    if (errorDetail) {
+      work.lastError = errorDetail;
+    } else {
+      delete work.lastError;
     }
   });
 }
@@ -164,6 +170,12 @@ export function completeWork(workId: string): void {
     work.currentRunPid = null;
     work.completedAt = new Date().toISOString();
     work.lastActiveAt = new Date().toISOString();
+  });
+}
+
+export function renameWork(workId: string, name: string): void {
+  updateWork(workId, work => {
+    work.name = name;
   });
 }
 

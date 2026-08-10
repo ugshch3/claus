@@ -20,6 +20,7 @@ export const IPC = {
   WORK_RESPOND: 'work:respond',
   WORK_CANCEL: 'work:cancel',
   WORK_RESTART_RUN: 'work:restart-run',
+  WORK_RENAME: 'work:rename',
 
   // Settings
   SETTINGS_GET: 'settings:get',

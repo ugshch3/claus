@@ -20,19 +20,20 @@ interface ElectronAPI {
 
   workList(projectId?: string): Promise<Work[]>;
   workGet(id: string): Promise<{ work: Work; lastResult: string | null }>;
-  workCreate(params: { projectId: string; description: string }): Promise<Work>;
+  workCreate(params: { projectId: string; name?: string; description: string }): Promise<Work>;
   workDelete(id: string): Promise<void>;
   workComplete(id: string): Promise<void>;
   workRespond(id: string, message: string): Promise<void>;
   workCancel(id: string): Promise<void>;
   workRestartRun(id: string): Promise<void>;
+  workRename(id: string, name: string): Promise<void>;
 
   settingsGet(): Promise<Settings>;
   settingsUpdate(params: Partial<Settings>): Promise<Settings>;
 
   onRunEvent(callback: (data: { workId: string; event: StreamEvent }) => void): void;
   onRunStarted(callback: (data: { workId: string }) => void): void;
-  onRunCompleted(callback: (data: { workId: string; exitCode: number; reason: string }) => void): void;
+  onRunCompleted(callback: (data: { workId: string; exitCode: number; reason: string; errorDetail?: string }) => void): void;
   onWorkUpdated(callback: (data: { work: Work }) => void): void;
 }
 

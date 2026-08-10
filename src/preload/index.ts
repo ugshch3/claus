@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('work:respond', { id, message }),
   workCancel: (id: string) => ipcRenderer.invoke('work:cancel', { id }),
   workRestartRun: (id: string) => ipcRenderer.invoke('work:restart-run', { id }),
+  workRename: (id: string, name: string) =>
+    ipcRenderer.invoke('work:rename', { id, name }),
 
   // Settings
   settingsGet: () => ipcRenderer.invoke('settings:get'),

@@ -281,10 +281,11 @@ function bindForms() {
   // Work Create form
   document.getElementById('form-work-create').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const name = document.getElementById('work-name').value.trim();
     const description = document.getElementById('work-desc').value.trim();
-    if (!description) return;
+    if (!name || !description) return;
 
-    await submitWorkCreate({ projectId: state.selectedProjectId, description });
+    await submitWorkCreate({ projectId: state.selectedProjectId, name, description });
   });
 
   // Work respond form
@@ -318,6 +319,41 @@ function bindForms() {
     await api.workCancel(state.selectedWorkId);
   });
 
+  // Rename work
+  document.getElementById('btn-rename-work').addEventListener('click', () => {
+    const titleRow = document.getElementById('work-detail-title-row');
+    const renameRow = document.getElementById('work-detail-rename');
+    const input = document.getElementById('rename-input');
+    const work = state.works.find(w => w.id === state.selectedWorkId);
+    input.value = work ? workDisplayName(work) : '';
+    titleRow.classList.add('hidden');
+    renameRow.classList.remove('hidden');
+    input.focus();
+  });
+
+  document.getElementById('btn-rename-save').addEventListener('click', async () => {
+    const name = document.getElementById('rename-input').value.trim();
+    if (!name || !state.selectedWorkId) return;
+    await api.workRename(state.selectedWorkId, name);
+    await loadWorks();
+    const { work, lastResult } = await api.workGet(state.selectedWorkId);
+    renderWorkDetail(work, lastResult);
+  });
+
+  document.getElementById('rename-input').addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btn-rename-save').click();
+    } else if (e.key === 'Escape') {
+      document.getElementById('btn-rename-cancel').click();
+    }
+  });
+
+  document.getElementById('btn-rename-cancel').addEventListener('click', () => {
+    document.getElementById('work-detail-title-row').classList.remove('hidden');
+    document.getElementById('work-detail-rename').classList.add('hidden');
+  });
+
   // Settings form
   document.getElementById('form-settings').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -331,6 +367,11 @@ function bindForms() {
     renderSettingsForm();
     showView('works');
   });
+}
+
+// ---- Work helpers ----
+function workDisplayName(w) {
+  return w.name || w.description;
 }
 
 // ---- Work List ----
@@ -355,7 +396,7 @@ function renderWorkList() {
 
     const desc = document.createElement('div');
     desc.className = 'work-item-desc';
-    desc.textContent = w.description;
+    desc.textContent = workDisplayName(w);
 
     const meta = document.createElement('div');
     meta.className = 'work-item-meta';
@@ -393,9 +434,15 @@ async function selectWork(workId) {
 
 function renderWorkDetail(work, lastResult) {
   document.getElementById('work-detail').classList.remove('hidden');
-  document.getElementById('work-detail-title').textContent = work.description;
+  document.getElementById('work-detail-title').textContent = workDisplayName(work);
   document.getElementById('work-detail-branch').textContent = `Branch: ${work.branch}`;
   document.getElementById('work-detail-runs').textContent = `Runs: ${work.runCount}`;
+
+  // Rename controls
+  const titleRow = document.getElementById('work-detail-title-row');
+  const renameRow = document.getElementById('work-detail-rename');
+  titleRow.classList.remove('hidden');
+  renameRow.classList.add('hidden');
 
   const statusBadge = renderStatusBadge(work.status, work.statusNote);
   const statusContainer = document.getElementById('work-detail-status');
