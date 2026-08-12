@@ -297,3 +297,34 @@ button.danger:hover { background: #6a2a2a; }
 #dialog-body { font-size: 13px; line-height: 1.5; color: #bbb; margin-bottom: 16px; }
 #dialog-body ul { margin: 8px 0; padding-left: 20px; }
 #dialog-body li { margin-bottom: 2px; font-family: monospace; font-size: 12px; color: #999; }
+
+/* ---- Slash Command Autocomplete ---- */
+.input-with-slash { position: relative; margin-top: 4px; }
+.input-with-slash textarea { padding-right: 32px; }
+.btn-slash {
+  position: absolute; top: 8px; right: 8px;
+  width: 24px; height: 24px; padding: 0;
+  background: #2a2a3a; color: #aaa;
+  border-radius: 4px; font-size: 14px; line-height: 24px;
+}
+.btn-slash:hover { background: #4a4a7a; color: #fff; }
+.slash-dropdown {
+  position: absolute; z-index: 900;
+  background: #1a1a30; border: 1px solid #3a3a5a; border-radius: 6px;
+  max-height: 240px; overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.slash-dropdown-item {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px;
+}
+.slash-dropdown-item:hover, .slash-dropdown-item.active { background: #2a2a5a; }
+.slash-dropdown-item .cmd-name { font-weight: 600; color: #ddd; white-space: nowrap; }
+.slash-dropdown-item .cmd-desc {
+  color: #888; font-size: 11px; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.slash-dropdown-item .cmd-source {
+  color: #555; font-size: 10px; text-transform: uppercase; white-space: nowrap;
+}
+.slash-dropdown-empty { padding: 8px 12px; color: #666; font-size: 12px; }
