@@ -10,6 +10,7 @@ const state = {
   selectedWorkId: null,
   activeRuns: {},      // workId → { events: [] }
   settings: {},
+  skillsCache: { skills: [], builtIn: [] },
   currentView: 'works', // 'works' | 'project-create' | 'settings' | 'new-ui'
   viewingActive: false, // true when "Active Works" is selected in sidebar
   uiMode: 'classic',    // 'classic' | 'new'
@@ -130,10 +131,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   bindUIToggle();
 
+  // Attach /-command autocomplete to input fields
+  initSlashAutocomplete();
+
   // Load data; failures are non-fatal
   try { await loadProjects(); } catch (e) { console.error('loadProjects failed:', e); }
   try { await loadActiveWorks(); } catch (e) { console.error('loadActiveWorks failed:', e); }
   try { await loadSettings(); } catch (e) { console.error('loadSettings failed:', e); }
+  try { await loadSkills(); } catch (e) { console.error('loadSkills failed:', e); }
 
   // Apply persisted UI mode
   applyUIMode();
@@ -159,6 +164,34 @@ async function loadWorks() {
 async function loadSettings() {
   state.settings = await api.settingsGet();
   renderSettingsForm();
+}
+
+function getCurrentProjectPath() {
+  const project = state.projects.find(p => p.id === state.selectedProjectId);
+  return project ? project.path : undefined;
+}
+
+async function loadSkills() {
+  try {
+    const result = await api.skillsList(getCurrentProjectPath());
+    state.skillsCache.skills = result.skills || [];
+    state.skillsCache.builtIn = result.builtIn || [];
+  } catch (e) {
+    console.error('loadSkills failed:', e);
+  }
+}
+
+function initSlashAutocomplete() {
+  SlashAutocomplete.attach(
+    document.getElementById('work-desc'),
+    document.getElementById('btn-slash-work'),
+    state.skillsCache
+  );
+  SlashAutocomplete.attach(
+    document.getElementById('respond-message'),
+    document.getElementById('btn-slash-respond'),
+    state.skillsCache
+  );
 }
 
 async function loadActiveWorks() {
@@ -215,6 +248,7 @@ function selectActiveWorks() {
   document.getElementById('work-detail').classList.add('hidden');
   document.getElementById('work-create-form').classList.add('hidden');
   loadWorks();
+  loadSkills(); // no project selected → global skills only
   showView('works');
 }
 
@@ -323,6 +357,7 @@ async function selectProject(id) {
   document.getElementById('work-detail').classList.add('hidden');
   document.getElementById('work-create-form').classList.add('hidden');
   await loadWorks();
+  await loadSkills(); // refresh for project-specific skills
   showView('works');
 }
 
