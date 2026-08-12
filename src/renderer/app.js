@@ -500,7 +500,7 @@ function bindForms() {
     await api.workRename(state.selectedWorkId, name);
     await loadWorks();
     const { work, lastResult } = await api.workGet(state.selectedWorkId);
-    renderWorkDetail(work, lastResult);
+    await renderWorkDetail(work, lastResult);
   });
 
   document.getElementById('rename-input').addEventListener('keydown', async (e) => {
@@ -602,10 +602,10 @@ async function selectWork(workId) {
   document.getElementById('work-create-form').classList.add('hidden');
 
   const { work, lastResult } = await api.workGet(workId);
-  renderWorkDetail(work, lastResult);
+  await renderWorkDetail(work, lastResult);
 }
 
-function renderWorkDetail(work, lastResult) {
+async function renderWorkDetail(work, lastResult) {
   document.getElementById('work-detail').classList.remove('hidden');
   document.getElementById('work-detail-title').textContent = workDisplayName(work);
   document.getElementById('work-detail-branch').textContent = `Branch: ${work.branch}`;
@@ -640,15 +640,17 @@ function renderWorkDetail(work, lastResult) {
     document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.add('hidden');
-    const resultEl = document.getElementById('last-result');
+
+    // Render full history (or error if present)
+    const historyEl = document.getElementById('work-history');
     if (work.lastError) {
-      // Run failed (e.g. exit 127 — wrapper misconfigured): surface stderr
-      // instead of the stale result from the previous successful run.
-      resultEl.textContent = `⚠️ Run failed${work.statusNote ? ` (${work.statusNote})` : ''}:\n\n${work.lastError}`;
-      resultEl.classList.add('result-error');
+      historyEl.innerHTML = '';
+      const errDiv = document.createElement('div');
+      errDiv.className = 'history-entry-error';
+      errDiv.textContent = `⚠️ Run failed${work.statusNote ? ` (${work.statusNote})` : ''}:\n\n${work.lastError}`;
+      historyEl.appendChild(errDiv);
     } else {
-      resultEl.textContent = lastResult || '(no output)';
-      resultEl.classList.remove('result-error');
+      await renderWorkHistory(work.id);
     }
     document.getElementById('respond-message').value = '';
   } else {
@@ -657,11 +659,11 @@ function renderWorkDetail(work, lastResult) {
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.remove('hidden');
-    if (lastResult) {
-      document.getElementById('awaiting-input').classList.remove('hidden');
-      document.getElementById('last-result').textContent = lastResult;
-      document.getElementById('form-respond').classList.add('hidden');
-    }
+
+    // Always show history for completed works
+    document.getElementById('awaiting-input').classList.remove('hidden');
+    document.getElementById('form-respond').classList.add('hidden');
+    await renderWorkHistory(work.id);
   }
 }
 
@@ -673,14 +675,205 @@ function renderStreamEvents(workId) {
   container.scrollTop = container.scrollHeight;
 }
 
+// ---- Work History ----
+async function renderWorkHistory(workId) {
+  const container = document.getElementById('work-history');
+  container.innerHTML = '';
+
+  try {
+    const { messages } = await api.workHistory(workId);
+    if (!messages || messages.length === 0) return; // CSS :empty rule shows '(no history yet)'
+
+    // Show conversation turns: user message → final LLM answer,
+    // repeated for each exchange.
+    const turns = buildTurns(messages);
+    turns.forEach(turn => {
+      const userEl = renderUserMessage(turn.user);
+      if (userEl) container.appendChild(userEl);
+      if (turn.answer) {
+        const answerEl = renderHistoryEntry(turn.answer);
+        if (answerEl) container.appendChild(answerEl);
+      }
+    });
+    container.scrollTop = container.scrollHeight;
+  } catch (err) {
+    console.error('Failed to load work history:', err);
+    // CSS :empty rule will show '(no history yet)'
+  }
+}
+
+// Group messages into conversation turns. Each turn = one user message
+// + the final assistant text answer produced before the next user message.
+function buildTurns(messages) {
+  const turns = [];
+  let currentUser = null;
+  let currentAnswer = null;
+
+  for (const msg of messages) {
+    if (msg.type === 'user') {
+      if (currentUser) turns.push({ user: currentUser, answer: currentAnswer });
+      currentUser = msg;
+      currentAnswer = null;
+    } else if (msg.type === 'assistant') {
+      // Keep the last text-bearing assistant message as the turn's answer
+      if (hasTextContent(msg)) currentAnswer = msg;
+    } else if (msg.type === 'result' && !currentAnswer) {
+      // Fallback: use the result as the answer if no assistant text appeared
+      currentAnswer = msg;
+    }
+  }
+
+  if (currentUser) turns.push({ user: currentUser, answer: currentAnswer });
+  return turns;
+}
+
+function hasTextContent(msg) {
+  if (!msg.message?.content) return false;
+  const parts = Array.isArray(msg.message.content)
+    ? msg.message.content
+    : [msg.message.content];
+  return parts.some(p => p.type === 'text');
+}
+
+function renderHistoryEntry(entry) {
+  switch (entry.type) {
+    case 'user':
+      return renderUserMessage(entry);
+    case 'assistant':
+      return renderAssistantMessage(entry);
+    case 'result':
+      return renderResultSummary(entry);
+    case 'system':
+      // Only show session init, skip other system events
+      if (entry.subtype === 'init') {
+        return renderStreamEvent(entry, false);
+      }
+      return null;
+    case 'mode':
+    case 'attachment':
+      // Internal events — not useful in chat history
+      return null;
+    default:
+      return null;
+  }
+}
+
+function renderUserMessage(entry) {
+  const div = document.createElement('div');
+  div.className = 'history-message history-user';
+
+  const label = document.createElement('span');
+  label.className = 'message-label';
+  label.textContent = 'You';
+
+  const text = document.createElement('div');
+  text.className = 'message-text';
+
+  // Extract text from user message (same format as assistant)
+  if (entry.message?.content) {
+    if (Array.isArray(entry.message.content)) {
+      const textParts = entry.message.content
+        .filter(c => c.type === 'text')
+        .map(c => c.text);
+      text.textContent = textParts.join('\n') || '(empty message)';
+    } else {
+      text.textContent = String(entry.message.content);
+    }
+  } else if (entry.text) {
+    text.textContent = entry.text;
+  } else {
+    text.textContent = JSON.stringify(entry, null, 1);
+  }
+
+  div.appendChild(label);
+  div.appendChild(text);
+  return div;
+}
+
+function renderAssistantMessage(entry) {
+  const div = document.createElement('div');
+  div.className = 'history-message history-assistant';
+
+  if (!entry.message?.content) {
+    div.textContent = '(empty response)';
+    return div;
+  }
+
+  const parts = Array.isArray(entry.message.content)
+    ? entry.message.content
+    : [entry.message.content];
+
+  parts.forEach(part => {
+    if (part.type === 'text') {
+      const textEl = document.createElement('div');
+      textEl.className = 'message-text';
+      textEl.textContent = part.text;
+      div.appendChild(textEl);
+    } else if (part.type === 'tool_use') {
+      const toolEl = document.createElement('div');
+      toolEl.className = 'message-tool';
+      const label = document.createElement('span');
+      label.className = 'message-tool-label';
+      label.textContent = part.name;
+      toolEl.appendChild(label);
+      if (part.input) {
+        const detail = document.createElement('span');
+        detail.className = 'message-tool-detail';
+        const file = part.input.file_path || part.input.path || part.input.command || '';
+        detail.textContent = file ? ` → ${file}` : '';
+        toolEl.appendChild(detail);
+      }
+      div.appendChild(toolEl);
+    }
+    // thinking — skip entirely in history
+  });
+
+  return div;
+}
+
+function renderResultSummary(entry) {
+  const div = document.createElement('div');
+  div.className = 'history-message history-result';
+
+  const parts = [];
+  if (entry.num_turns !== undefined) parts.push(`Turns: ${entry.num_turns}`);
+  if (entry.total_cost_usd !== undefined) parts.push(`Cost: $${entry.total_cost_usd}`);
+  const summary = parts.join(' · ') || 'Run completed';
+
+  const label = document.createElement('span');
+  label.className = 'result-label';
+  label.textContent = '📊';
+
+  const text = document.createTextNode(summary);
+  div.appendChild(label);
+  div.appendChild(text);
+
+  // If result has a text body, show it below
+  if (entry.result) {
+    const body = document.createElement('div');
+    body.style.marginTop = '6px';
+    body.style.whiteSpace = 'pre-wrap';
+    body.style.color = '#bbb';
+    body.style.fontSize = '13px';
+    body.style.fontFamily = 'inherit';
+    body.textContent = String(entry.result);
+    div.appendChild(body);
+  }
+
+  return div;
+}
+
 // ---- Stream Event Card ----
-function renderStreamEvent(event) {
+function renderStreamEvent(event, showLabel = true) {
   const div = document.createElement('div');
   div.className = `stream-event type-${event.type}`;
 
-  const typeLabel = document.createElement('div');
-  typeLabel.className = 'event-type';
-  typeLabel.textContent = event.type + (event.subtype ? ` / ${event.subtype}` : '');
+  if (showLabel) {
+    const typeLabel = document.createElement('div');
+    typeLabel.className = 'event-type';
+    typeLabel.textContent = event.type + (event.subtype ? ` / ${event.subtype}` : '');
+    div.appendChild(typeLabel);
+  }
 
   const content = document.createElement('div');
   content.className = 'event-content';
@@ -718,7 +911,6 @@ function renderStreamEvent(event) {
     content.textContent = JSON.stringify(event, null, 1);
   }
 
-  div.appendChild(typeLabel);
   div.appendChild(content);
   return div;
 }
@@ -783,7 +975,7 @@ function bindEvents() {
     if (workId === state.selectedWorkId) {
       const { work } = await api.workGet(workId);
       if (work.status === 'IN_PROGRESS') {
-        renderWorkDetail(work, null);
+        await renderWorkDetail(work, null);
       }
     }
   });
@@ -811,7 +1003,7 @@ function bindEvents() {
     // Update detail view if selected
     if (workId === state.selectedWorkId) {
       const { work, lastResult } = await api.workGet(workId);
-      renderWorkDetail(work, lastResult);
+      await renderWorkDetail(work, lastResult);
     }
   });
 
@@ -820,7 +1012,7 @@ function bindEvents() {
     await loadWorks();
     if (work.id === state.selectedWorkId) {
       const { work: w, lastResult } = await api.workGet(work.id);
-      renderWorkDetail(w, lastResult);
+      await renderWorkDetail(w, lastResult);
     }
   });
 }

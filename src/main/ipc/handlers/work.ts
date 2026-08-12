@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import {
-  createWork, listWorks, getWork, getLastResult,
+  createWork, listWorks, getWork, getLastResult, getFullHistory,
   completeWork, deleteWork, markRunStarted, markRunCompleted, renameWork,
 } from '../../work/work-manager';
 import { getProject } from '../../project/project-manager';
@@ -77,6 +77,14 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_RENAME,
     async (_event, { id, name }: { id: string; name: string }) => {
       renameWork(id, name);
+    }
+  );
+
+  ipcMain.handle(
+    IPC.WORK_HISTORY,
+    async (_event, { id }: { id: string }) => {
+      const messages = getFullHistory(id);
+      return { messages };
     }
   );
 }

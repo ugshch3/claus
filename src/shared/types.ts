@@ -38,6 +38,12 @@ export interface StreamEvent {
   [key: string]: any;
 }
 
+/** Одно сообщение из JSONL-истории сессии (user/assistant/result/system) */
+export interface HistoryEntry {
+  type: string;
+  [key: string]: any;
+}
+
 export interface AppData {
   version: number;
   projects: Project[];

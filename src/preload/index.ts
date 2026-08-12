@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   workRestartRun: (id: string) => ipcRenderer.invoke('work:restart-run', { id }),
   workRename: (id: string, name: string) =>
     ipcRenderer.invoke('work:rename', { id, name }),
+  workHistory: (id: string) =>
+    ipcRenderer.invoke('work:history', { id }),
 
   // Settings
   settingsGet: () => ipcRenderer.invoke('settings:get'),

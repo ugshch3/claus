@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { Work } from '../../shared/types';
+import { Work, HistoryEntry } from '../../shared/types';
 import { load, save } from '../storage/store';
 import {
   getProject,
@@ -162,6 +162,43 @@ export function sessionFileExists(workId: string): boolean {
   );
 
   return fs.existsSync(jsonlPath);
+}
+
+export function getFullHistory(workId: string): HistoryEntry[] {
+  const work = getWork(workId);
+  if (!work) return [];
+
+  const project = getProject(work.projectId);
+  if (!project) return [];
+
+  const resolvedPath = project.path.startsWith('~')
+    ? path.join(os.homedir(), project.path.slice(1))
+    : project.path;
+  const slug = slugifyPath(resolvedPath);
+  const jsonlPath = path.join(
+    os.homedir(), '.claude', 'projects', slug, `${work.id}.jsonl`
+  );
+
+  try {
+    if (!fs.existsSync(jsonlPath)) return [];
+    const content = fs.readFileSync(jsonlPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    if (lines.length === 0) return [];
+
+    const entries: HistoryEntry[] = [];
+    for (const line of lines) {
+      try {
+        entries.push(JSON.parse(line));
+      } catch {
+        // Malformed JSON line — skip with warning
+        console.warn(`[work-manager] Skipping malformed JSONL line for work ${workId}`);
+      }
+    }
+    return entries;
+  } catch (err) {
+    console.error(`[work-manager] Failed to read history for work ${workId}:`, err);
+    return [];
+  }
 }
 
 export function markRunStarted(workId: string, pid: number): void {
