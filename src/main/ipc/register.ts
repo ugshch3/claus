@@ -9,6 +9,7 @@ import { RunResult, StreamEvent, Work } from '../../shared/types';
 import { registerProjectHandlers } from './handlers/project';
 import { registerWorkHandlers, WorkHandlerDeps } from './handlers/work';
 import { registerSettingsHandlers } from './handlers/settings';
+import { registerSkillsHandlers } from './handlers/skills';
 import { logInfo, logError, logWarn } from '../utils/logger';
 import {
   acquireLocalSettings,
@@ -25,6 +26,7 @@ export function registerAllIPC(window: BrowserWindow): void {
 
   registerProjectHandlers();
   registerSettingsHandlers();
+  registerSkillsHandlers();
 
   const deps: WorkHandlerDeps = {
     spawnRun: (workId: string, prompt: string) => spawnRun(workId, prompt),
