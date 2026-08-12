@@ -27,3 +27,64 @@ export const BUILT_IN_COMMANDS: SkillEntry[] = [
   { name: 'add-dir', description: 'Add a directory to the workspace', source: 'built-in' },
   { name: 'permissions', description: 'Manage permission rules', source: 'built-in' },
 ];
+
+/**
+ * Парсит YAML-фронтматтер SKILL.md и возвращает name + description.
+ * Обрабатывает inline-значения (`name: foo`) и блочные скаляры
+ * (`description: >` с отступом продолжения).
+ * Возвращает null, если фронтматтер отсутствует или нет поля name.
+ */
+export function parseSkillFrontmatter(
+  content: string
+): { name: string; description: string } | null {
+  const match = content.match(/^\s*---\s*\n([\s\S]*?)\n---/);
+  if (!match) return null;
+
+  const frontmatter = match[1];
+  const name = extractField(frontmatter, 'name');
+  if (!name) return null;
+
+  const description = extractField(frontmatter, 'description') || '';
+  return { name, description };
+}
+
+/**
+ * Извлекает значение поля из YAML-фронтматтера.
+ * Поддерживает `key: value` и `key: >` / `key: |` с многострочным телом.
+ */
+function extractField(frontmatter: string, key: string): string | null {
+  const lines = frontmatter.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(new RegExp(`^${key}:\\s*(.*)$`));
+    if (!match) continue;
+
+    const inlineValue = match[1].trim();
+
+    // Блочный скаляр: маркер `>` или `|`, либо пустое значение
+    if (inlineValue === '>' || inlineValue === '|' || inlineValue === '') {
+      const blockLines: string[] = [];
+      let j = i + 1;
+      while (j < lines.length) {
+        const nextLine = lines[j];
+        if (nextLine.trim() === '') {
+          // Пустая строка внутри блока — сохраняем и продолжаем
+          blockLines.push('');
+          j++;
+          continue;
+        }
+        if (/^\s/.test(nextLine)) {
+          blockLines.push(nextLine.trim());
+          j++;
+        } else {
+          break;
+        }
+      }
+      return blockLines.filter(l => l.length > 0).join(' ');
+    }
+
+    return inlineValue;
+  }
+  return null;
+}
+
