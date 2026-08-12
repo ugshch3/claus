@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsUpdate: (params: any) => ipcRenderer.invoke('settings:update', params),
 
+  // Skills
+  skillsList: (projectPath?: string) => ipcRenderer.invoke('skills:list', { projectPath }),
+
   // Events (Main → Renderer)
   onRunEvent: (callback: (data: any) => void) => {
     ipcRenderer.on('run:event', (_event, data) => callback(data));
