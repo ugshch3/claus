@@ -1,5 +1,9 @@
 // Сканирование скиллов Claude Code и встроенных команд
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 export interface SkillEntry {
   name: string;
   description: string;
@@ -87,4 +91,75 @@ function extractField(frontmatter: string, key: string): string | null {
   }
   return null;
 }
+
+/**
+ * Сканирует глобальные (`~/.claude/skills/`) и проектные
+ * (`<projectPath>/.claude/skills/`) скиллы. Проектные скиллы
+ * переопределяют глобальные при совпадении имени.
+ */
+export function scanSkills(projectPath?: string): SkillsListResult {
+  const globalSkills = scanDirectory(path.join(os.homedir(), '.claude', 'skills'), 'global');
+  const projectSkills = projectPath
+    ? scanDirectory(path.join(projectPath, '.claude', 'skills'), 'project')
+    : [];
+
+  // Проектные скиллы имеют приоритет над глобальными
+  const merged = new Map<string, SkillEntry>();
+  for (const skill of [...globalSkills, ...projectSkills]) {
+    merged.set(skill.name, skill);
+  }
+
+  return {
+    skills: Array.from(merged.values()),
+    builtIn: BUILT_IN_COMMANDS,
+  };
+}
+
+/**
+ * Сканирует одну директорию со скиллами. Каждая поддиректория (или
+ * симлинк на неё) считается скиллом, если содержит SKILL.md.
+ */
+function scanDirectory(dirPath: string, source: 'global' | 'project'): SkillEntry[] {
+  if (!fs.existsSync(dirPath)) return [];
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dirPath);
+  } catch {
+    return [];
+  }
+
+  const skills: SkillEntry[] = [];
+  for (const entryName of entries) {
+    const entryPath = path.join(dirPath, entryName);
+
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(entryPath); // следует по симлинкам
+    } catch {
+      continue;
+    }
+    if (!stat.isDirectory()) continue;
+
+    const skillFile = path.join(entryPath, 'SKILL.md');
+    if (!fs.existsSync(skillFile)) continue;
+
+    try {
+      const content = fs.readFileSync(skillFile, 'utf-8');
+      const parsed = parseSkillFrontmatter(content);
+      if (parsed) {
+        skills.push({
+          name: parsed.name || entryName,
+          description: parsed.description,
+          source,
+        });
+      }
+    } catch {
+      // Битый SKILL.md — пропускаем скилл
+    }
+  }
+
+  return skills;
+}
+
 
