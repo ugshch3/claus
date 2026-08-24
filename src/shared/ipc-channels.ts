@@ -26,6 +26,9 @@ export const IPC = {
   // Settings
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
+
+  // Skills
+  SKILLS_LIST: 'skills:list',
 } as const;
 
 // События (Main → Renderer)

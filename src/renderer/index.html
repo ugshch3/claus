@@ -75,7 +75,12 @@
           <h3>New Work</h3>
           <form id="form-work-create">
             <label>Name <input type="text" id="work-name" placeholder="Short name for this work" required></label>
-            <label>Description <textarea id="work-desc" rows="3" required></textarea></label>
+            <label>Description
+              <div class="input-with-slash">
+                <textarea id="work-desc" rows="3" required></textarea>
+                <button type="button" class="btn-slash" id="btn-slash-work" title="Available commands">/</button>
+              </div>
+            </label>
             <label id="work-dir-label" class="hidden">Directory <input type="text" id="work-dir" placeholder="/path/to/project"></label>
             <div class="form-actions">
               <button type="submit">Create & Run</button>
@@ -115,7 +120,10 @@
           <div id="awaiting-input" class="hidden">
             <div id="work-history"></div>
             <form id="form-respond">
-              <textarea id="respond-message" rows="3" placeholder="Your response..."></textarea>
+              <div class="input-with-slash">
+                <textarea id="respond-message" rows="3" placeholder="Your response..."></textarea>
+                <button type="button" class="btn-slash" id="btn-slash-respond" title="Available commands">/</button>
+              </div>
               <div class="form-actions">
                 <button type="submit">Send</button>
                 <button type="button" id="btn-complete-work">Mark Complete</button>
@@ -175,6 +183,7 @@
     </div>
   </div>
 
+  <script src="slash-autocomplete.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

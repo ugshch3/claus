@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 export type Profile = 'android' | 'frontend' | 'python' | 'generic';
 
@@ -48,10 +49,44 @@ jq -n --arg d "$DECISION" '{
 `;
 }
 
+// Known MCP servers, used as a fallback when ~/.claude.json can't be read.
+// Server names with ':' (e.g. 'generic:jira') are normalised to '_' in Claude
+// Code permission rules, so the allow entry is 'mcp__generic_jira'.
+const FALLBACK_MCP_SERVERS = [
+  'generic_allure',
+  'generic_apptracer',
+  'generic_confluence',
+  'generic_gitlab',
+  'generic_jira',
+  'vkws',
+];
+
+/**
+ * Build permission rules that allow every MCP server's tools.
+ *
+ * Claude Code does NOT expand `mcp__*` (a `*` in the server position never
+ * matches), so we must enumerate each server explicitly: `mcp__<server>` or
+ * `mcp__<server>__*`. Servers are read from the global ~/.claude.json config.
+ */
+function getMcpAllowRules(): string[] {
+  try {
+    const claudeJson = JSON.parse(
+      fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf-8')
+    );
+    const servers = Object.keys(claudeJson.mcpServers ?? {});
+    if (servers.length > 0) {
+      return servers.map(s => `mcp__${s.replace(/[^a-zA-Z0-9_-]/g, '_')}`);
+    }
+  } catch {
+    // fall through to static list
+  }
+  return FALLBACK_MCP_SERVERS.map(s => `mcp__${s}`);
+}
+
 function generateSettingsJson(): string {
   const settings = {
     permissions: {
-      allow: ['mcp__*', 'Read', 'Glob', 'Grep', 'Edit', 'Write'],
+      allow: [...getMcpAllowRules(), 'Read', 'Glob', 'Grep', 'Edit', 'Write'],
       deny: [
         'Read(.env*)',
         'Bash(rm -rf *)',
@@ -121,7 +156,7 @@ export function sync(projectPath: string, profile: Profile): void {
 function generateLocalSettingsJson(): string {
   const settings = {
     permissions: {
-      allow: ['mcp__*', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'],
+      allow: [...getMcpAllowRules(), 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'],
     },
     hooks: {
       PreToolUse: [
