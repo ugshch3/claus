@@ -3,39 +3,41 @@
 ## 1. Обзор слоёв
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Renderer Process                     │
-│  index.html  ←→  app.js  ←→  api/ipc-client.ts          │
-│                        │ IPC (invoke + events)            │
-├────────────────────────┼────────────────────────────────┤
-│                     Preload                              │
-│              contextBridge.exposeInMainWorld             │
-│                        │                                 │
-├────────────────────────┼────────────────────────────────┤
-│                    Main Process                          │
-│                        │                                 │
-│  ┌─────────────────────┼──────────────────────┐         │
-│  │  ipc/register.ts  ←─┼─  Orchestration       │         │
-│  │  ipc/handlers/     ←┼─  (project/work/settings)│      │
-│  └─────────┬───────────┼──────────────────────┘         │
-│            │                                              │
-│  ┌─────────┼──────────┬──────────────┬──────────┐       │
-│  │ project/│  work/   │   run/       │ claude/  │       │
-│  │ manager │  manager │   process    │ config   │       │
-│  └────┬────┴────┬─────┴──────┬───────┴────┬─────┘       │
-│       │         │            │            │              │
-│  ┌────┴─────────┴────────────┴────────────┴────┐        │
-│  │  storage/store.ts  │  git/git-service.ts    │        │
-│  │  utils/logger.ts   │                        │        │
-│  └────────────────────┴────────────────────────┘        │
-│                        │                                 │
-│  ┌─────────────────────┼──────────────────────┐         │
-│  │  ~/.claude/session-manager.json             │         │
-│  │  ~/.claude/projects/<slug>/<uuid>.jsonl     │         │
-│  │  <project>/.claude/settings.json            │         │
-│  │  <project>/.claude/hooks/classify-bash.sh   │         │
-│  └────────────────────────────────────────────┘         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     Renderer Process                             │
+│  index.html  ←→  app.js  ←→  api/ipc-client.ts                  │
+│            slash-autocomplete.js  (autocomplete /-команд)        │
+│                        │ IPC (invoke + events)                    │
+├────────────────────────┼────────────────────────────────────────┤
+│                     Preload                                      │
+│              contextBridge.exposeInMainWorld                     │
+│                        │                                         │
+├────────────────────────┼────────────────────────────────────────┤
+│                    Main Process                                  │
+│                        │                                         │
+│  ┌─────────────────────┼──────────────────────┐                 │
+│  │  ipc/register.ts  ←─┼─  Orchestration       │                 │
+│  │  ipc/handlers/     ←┼─  (project/work/settings/skills)│      │
+│  └─────────┬───────────┼──────────────────────┘                 │
+│            │                                                      │
+│  ┌─────────┼──────────┬──────────────┬──────────┬────────┐      │
+│  │ project/│  work/   │   run/       │ claude/  │ skills/│      │
+│  │ manager │  manager │   process    │ config   │ scanner│      │
+│  └────┬────┴────┬─────┴──────┬───────┴────┬─────┴────┬───┘      │
+│       │         │            │            │          │           │
+│  ┌────┴─────────┴────────────┴────────────┴──────────┴───┐      │
+│  │  storage/store.ts  │  git/git-service.ts  │ utils/logger│     │
+│  └────────────────────┴──────────────────────┴─────────────┘     │
+│                        │                                         │
+│  ┌─────────────────────┼──────────────────────┐                 │
+│  │  ~/.claude/session-manager.json             │                 │
+│  │  ~/.claude/projects/<slug>/<uuid>.jsonl     │                 │
+│  │  ~/.claude/skills/<skill>/SKILL.md          │                 │
+│  │  <project>/.claude/settings.json            │                 │
+│  │  <project>/.claude/settings.local.json (+.backup)            │
+│  │  <project>/.claude/hooks/classify-bash.sh   │                 │
+│  └─────────────────────────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Принцип:** Main Process владеет всей логикой. Renderer — тонкий, только отображение. Связь через типизированные IPC-контракты. `contextIsolation: true`, `nodeIntegration: false`.
@@ -45,7 +47,7 @@
 ## 2. Слой хранения — `storage/store.ts`
 
 **Файл:** `~/.claude/session-manager.json`
-**Формат:** один JSON с полной загрузкой в память при старте, атомарная запись (tmp + rename) при каждом изменении.
+**Формат:** один JSON с полной загрузкой в память при каждом обращении, атомарная запись (tmp + rename) при каждом изменении.
 
 ### Публичные методы
 
@@ -67,23 +69,54 @@ interface AppData {
   settings: Settings;
 }
 
+interface Project {
+  id: string;                // UUID
+  name: string;
+  path: string;              // абсолютный путь (раскрытый ~)
+  slug: string;              // slugifyPath(path)
+  profile: Profile;          // 'android' | 'frontend' | 'python' | 'generic'
+  createdAt: string;         // ISO 8601
+}
+
 interface Settings {
   watchdogTimeoutMinutes: number;  // default 10
   defaultMaxTurns: number;         // default 25
   defaultProfile: string;          // 'android' | 'frontend' | 'python' | 'generic'
+  customPromptFragment: string;    // default '' — добавляется в начало каждого промпта
+  uiMode: 'classic' | 'new';       // default 'classic'
+}
+
+interface StreamEvent {
+  type: string;
+  [key: string]: any;
+}
+
+interface HistoryEntry {
+  type: string;
+  [key: string]: any;
+}
+
+type RunReason = 'ok' | 'error' | 'timeout' | 'stopped' | 'config';
+// 'config' — обёртка/окружение сломаны (напр. claude-sm вышел с кодом 127,
+// command not found). Отличаем от обычной ошибки Claude.
+
+interface RunResult {
+  exitCode: number;
+  reason: RunReason;
+  errorDetail?: string;      // хвост stderr для reason 'error' | 'config'
 }
 ```
 
 ### Инварианты
 - Один файл — один источник правды о проектах, Work и настройках
-- Загрузка при старте в `registerAllIPC()` → рекурентно через `load()` при каждом обращении
+- `load()` вызывается при каждом обращении (данные не кэшируются в памяти между вызовами)
 - При сохранении всегда пишется полный `AppData`, а не частичные изменения
 
 ---
 
 ## 3. Слой Git — `git/git-service.ts`
 
-Все git-операции через `execSync` с `cwd: projectPath` и таймаутом 30 секунд.
+Все git-операции через `execSync` с `cwd: projectPath` и таймаутом 30 секунд. Перед каждой операцией `checkGitAvailable()` кидает `GitNotFoundError`, если git не установлен.
 
 ### Публичные методы
 
@@ -97,27 +130,29 @@ interface Settings {
 | `getCurrentBranch(path)` | `(path: string)` | `string` |
 | `getDefaultBranch(path)` | `(path: string)` | `string` |
 | `getRemotes(path)` | `(path: string)` | `string[]` |
+| `initRepo(path)` | `(path: string)` | `void` |
 
 ### Иерархия ошибок
 
 ```
 GitError (code: string, userMessage: string)
 ├── DirtyRepoError    (code: 'DIRTY_REPO', files: string[])
-├── BranchExistsError (code: 'BRANCH_EXISTS', branchName: string)
+├── BranchExistsError (code: 'BRANCH_EXISTS')
 ├── CheckoutError     (code: 'CHECKOUT_ERROR')
 └── GitNotFoundError  (code: 'GIT_NOT_FOUND')
 ```
 
 ### Особенности реализации
 - `isDirty()` фильтрует `.claude/` — незакоммиченные изменения в `.claude/` не считаются «грязным» репозиторием (файлы конфигурации приложения)
-- `getDefaultBranch()` ищет `main`, затем `master`. Если нет ни того ни другого — ошибка
-- `discardChanges()` выполняет `git checkout -- . && git clean -fd` (только после подтверждения пользователем)
+- `getDefaultBranch()` ищет `main`, затем `master`. Если нет ни того ни другого — `GitError('NO_DEFAULT_BRANCH')`
+- `discardChanges()` выполняет `git checkout -- . && git clean -fd`
+- `createBranch()` перед созданием ветки пытается `git fetch origin` (игнорирует ошибку, если remote нет)
 
 ---
 
 ## 4. Слой Claude Code конфигурации — `claude/claude-config.ts`
 
-Управляет двумя артефактами в директории проекта: `settings.json` (разрешения) и `hooks/classify-bash.sh` (классификатор Bash).
+Управляет артефактами в директории проекта: `settings.json` (разрешения), `settings.local.json` (временные permissive-разрешения на время Run) и `hooks/classify-bash.sh` (классификатор Bash).
 
 ### Типы
 
@@ -129,17 +164,20 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `ensure(projectPath, profile)` | `(path: string, profile: Profile) => void` | Создаёт `.claude/settings.json`, `hooks/classify-bash.sh` и дополняет `.gitignore`. **Не перезаписывает**, если файлы уже существуют |
-| `sync(projectPath, profile)` | `(path: string, profile: Profile) => void` | Принудительно перезаписывает файлы (по запросу пользователя, например при смене профиля) |
+| `sync(projectPath, profile)` | `(path: string, profile: Profile) => void` | Создаёт `.claude/` + `hooks/`, дополняет `.gitignore` (`.claude/`), **всегда перезаписывает** `settings.json` и `classify-bash.sh` |
 | `generateHookScript(profile)` | `(profile: Profile) => string` | Генерирует тело `classify-bash.sh` с учётом профиля |
+| `acquireLocalSettings(projectPath)` | `(path: string) => void` | Reference-counted: на первом активном Run в проекте бэкапит `settings.local.json` (если есть), затем пишет permissive-версию. Безопасен при конкурентных Run |
+| `releaseLocalSettings(projectPath)` | `(path: string) => void` | Уменьшает счётчик; при последнем Run восстанавливает оригинал `settings.local.json` |
+| `releaseAllLocalSettings()` | `() => void` | Восстанавливает оригинал для всех проектов (при shutdown) |
+| `restoreLocalSettings(projectPath)` | `(path: string) => void` | Восстанавливает `settings.local.json` из `.backup` (используется при recovery после падения) |
 
 ### Артефакты, создаваемые модулем
 
-**`.claude/settings.json`:**
+**`.claude/settings.json`** (через `generateSettingsJson`):
 ```json
 {
   "permissions": {
-    "allow": ["Read", "Glob", "Grep", "Edit", "Write"],
+    "allow": ["mcp__generic_allure", "mcp__generic_jira", "...", "Read", "Glob", "Grep", "Edit", "Write"],
     "deny": ["Read(.env*)", "Bash(rm -rf *)", "Bash(git push --force *)"]
   },
   "hooks": {
@@ -154,6 +192,10 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 }
 ```
 
+**`.claude/settings.local.json`** (через `generateLocalSettingsJson`): то же самое, но с добавлением `'Bash'` в `allow` — временно расширенные права на время Run.
+
+**MCP-правила (`getMcpAllowRules`)**: Claude Code не разворачивает `mcp__*` (символ `*` в позиции сервера не матчится), поэтому серверы перечисляются явно. Имена читаются из `~/.claude.json` (`mcpServers`); если файл не читается — используется статический fallback (`generic_allure`, `generic_apptracer`, `generic_confluence`, `generic_gitlab`, `generic_jira`, `vkws`). Имена с `:` нормализуются в `_` (`generic:jira` → `mcp__generic_jira`).
+
 **`.claude/hooks/classify-bash.sh`:** shell-скрипт, классифицирующий Bash-команду через `case`. Возвращает JSON с `permissionDecision: "allow" | "deny" | "ask"`.
 
 ### Профили и whitelist в хуке
@@ -166,10 +208,10 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 | `generic` | Нет дополнительных |
 
 ### Инварианты
-- `ensure()` вызывается при создании проекта (`project:create` handler)
-- `sync()` вызывается при смене профиля (пока не реализован UI для смены профиля существующего проекта)
+- `sync()` вызывается при создании проекта (`project:create`), авто-создании проекта из `work:create` (directory) и при смене `defaultProfile` в `settings:update` (пересинхронизация всех проектов)
 - Всегда общий safe-whitelist (`git status`, `git diff`, `git log`, `git commit`, `git add`, `git branch`) плюс профильный
-- Blacklist: `rm -rf`, `git push --force`, `curl ... | bash/sh`
+- Blacklist: `rm -rf`, `git push --force`, `git push -f`, `curl ... | bash/sh`
+- Бэкап `settings.local.json` хранится в `settings.local.json.backup`; при отсутствии бэкапа permissive-файл остаётся на месте (безвреден до следующего `sync()`)
 
 ---
 
@@ -179,15 +221,17 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 
 | Метод | Сигнатура | Возврат | Побочные эффекты |
 |-------|-----------|---------|-----------------|
-| `createProject(params)` | `({ name, path, profile? })` | `Project` | Генерирует UUID, вычисляет slug из path, проверяет уникальность path, добавляет в store |
+| `createProject(params)` | `({ name, path, profile?, initRepo? })` | `Project` | Генерирует UUID, раскрывает `~`/относительный путь, проверяет уникальность пути, при `initRepo` — создаёт директорию и `git init`, добавляет в store |
 | `listProjects()` | `() => Project[]` | Массив проектов | — |
 | `getProject(id)` | `(id: string) => Project \| undefined` | Проект или undefined | — |
-| `deleteProject(id)` | `(id: string) => void` | — | Блокирует, если есть незавершённые Work'и в проекте. Удаляет из store |
+| `findProjectByPath(rawPath)` | `(path: string) => Project \| undefined` | Проект с совпадающим путём | — |
+| `generateUniqueName(baseName)` | `(name: string) => string` | Уникальное имя | Добавляет `-1`, `-2`, … при коллизии |
+| `deleteProject(id)` | `(id: string) => void` | — | Блокирует, если в проекте есть Work со статусом `!== 'COMPLETED'`. Удаляет из store |
 
 ### Правила валидации
-- `path` должен быть уникальным среди всех проектов
-- Нельзя удалить проект, в котором есть Work со статусом `IN_PROGRESS` или `AWAITING_INPUT`
-- `slug` = path с заменой всех не-алфанумерик символов на `-`
+- `path` должен быть уникальным среди всех проектов (сравнение по раскрытому пути)
+- Нельзя удалить проект, в котором есть хотя бы один незавершённый Work (`status !== 'COMPLETED'`)
+- `slug` = path с заменой всех не-алфанумерик символов на `-` (`/Users/me/my-app` → `-Users-me-my-app`)
 
 ---
 
@@ -199,15 +243,17 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 
 | Метод | Сигнатура | Возврат | Описание |
 |-------|-----------|---------|---------|
-| `createWork(params)` | `({ projectId, description, branchName })` | `Work` | Полная валидация + создание git-ветки + запись в store. Статус: `IN_PROGRESS` |
+| `createWork(params)` | `({ projectId?, name?, description, directory? })` | `Work` | Если передан `directory` — находит/авто-создаёт проект и синкает его конфиг. Записывает **текущую** ветку (git-ветка НЕ создаётся). Статус: `IN_PROGRESS` |
 | `listWorks(projectId?)` | `(projectId?: string)` | `Work[]` | Все Work'и или фильтр по проекту |
 | `getWork(id)` | `(id: string) => Work \| undefined` | Work или undefined | Поиск по ID |
 | `getLastResult(workId)` | `(workId: string) => string \| null` | Текст или null | Читает JSONL с диска, проходит от конца к началу в поисках последнего `result` или `assistant` |
-| `markRunStarted(workId, pid)` | `(workId: string, pid: number) => void` | — | Статус → `IN_PROGRESS`, запись PID |
-| `markRunCompleted(workId, statusNote?)` | `(workId: string, statusNote?: string) => void` | — | Статус → `AWAITING_INPUT`, очистка PID, инкремент `runCount` |
+| `getFullHistory(workId)` | `(workId: string) => HistoryEntry[]` | Массив записей | Читает весь JSONL сессии (для `work:history`) |
+| `sessionFileExists(workId)` | `(workId: string) => boolean` | Есть ли файл сессии | Используется для определения resume |
+| `markRunStarted(workId, pid)` | `(workId: string, pid: number) => void` | — | Статус → `IN_PROGRESS`, запись PID, очистка `lastError` |
+| `markRunCompleted(workId, statusNote?, errorDetail?)` | `(workId: string, statusNote?: string, errorDetail?: string) => void` | — | Статус → `AWAITING_INPUT`, очистка PID, инкремент `runCount`, запись `statusNote`/`lastError` |
 | `completeWork(workId)` | `(workId: string) => void` | — | Статус → `COMPLETED`, запись `completedAt` |
+| `renameWork(workId, name)` | `(workId: string, name: string) => void` | — | Переименование Work (`name`) |
 | `deleteWork(workId)` | `(workId: string) => void` | — | Убивает процесс по PID если жив, удаляет JSONL с диска, удаляет из store |
-| `ensureBranch(workId)` | `(workId: string) => void` | — | `git checkout <branch>` в директории проекта |
 | `updateWorkDirect(workId, updater)` | `(workId: string, updater: (Work) => void) => void` | — | Прямая мутация Work (для register.ts: shutdown/recovery) |
 
 ### Статусная машина
@@ -220,7 +266,7 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
               │                              │
    markRunCompleted()                   spawnRun()
    (причина: ok/error/                    (resume)
-    timeout/stopped)                        │
+    timeout/stopped/config)                 │
               │                              │
               ▼                              │
        AWAITING_INPUT ──────────────────────┘
@@ -231,12 +277,11 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
          COMPLETED
 ```
 
-### Валидация при createWork()
-1. Проект существует
-2. Репозиторий не грязный (если грязный — `DirtyRepoError`)
-3. Имя ветки уникально (если нет — `BranchExistsError`)
-4. В проекте нет активного Run'а (статус `IN_PROGRESS`)
-5. Создаётся git-ветка от `main`/`master`
+### Особенности createWork()
+1. При `directory` — `findProjectByPath()`; если проекта нет, авто-создание с `profile: 'generic'` + `syncClaudeConfig()`
+2. Обязателен либо `projectId`, либо `directory`
+3. `branch` = текущая ветка проекта (git-ветка **не** создаётся и **не** переключается — решает Claude Code)
+4. Если проект не git-репозиторий — `branch` остаётся пустым, git-проверки пропускаются
 
 ### Сущность Work
 
@@ -244,10 +289,12 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 interface Work {
   id: string;              // UUID = session_id Claude Code
   projectId: string;       // → Project.id
+  name?: string;           // короткое имя; при отсутствии в UI используется description
   description: string;     // Описание задачи / prompt первого Run
-  branch: string;          // Имя git-ветки
+  branch: string;          // Текущая ветка на момент создания
   status: 'IN_PROGRESS' | 'AWAITING_INPUT' | 'COMPLETED';
-  statusNote?: string;     // Пометка причины: «бюджет», «ошибка», «остановлено пользователем», «восстановлен»
+  statusNote?: string;     // Пометка причины: «ошибка», «таймаут», «остановлено», «восстановлен»
+  lastError?: string;      // Хвост stderr упавшего Run (показывается в UI)
   currentRunPid: number | null;
   runCount: number;
   lastActiveAt: string;    // ISO 8601
@@ -264,17 +311,23 @@ interface Work {
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `buildArgs(sessionId, prompt, settings, isResume)` | `(string, string, Settings, boolean) => string[]` | Собирает массив аргументов для `claude-sm` |
+| `buildArgs(sessionId, prompt, settings, isResume)` | `(string, string, Settings, boolean) => string[]` | Собирает массив аргументов для `claude -p` |
 
 **Результат для первого Run:**
 ```
-claude-sm --session-id <uuid> -p "<prompt>" --output-format stream-json --verbose --max-turns <N>
+--session-id <uuid> -p "<prompt>" --output-format stream-json --verbose --max-turns <N>
 ```
 
 **Результат для resume Run:**
 ```
-claude-sm --resume <uuid> -p "<prompt>" --output-format stream-json --verbose --max-turns <N>
+--resume <uuid> -p "<prompt>" --output-format stream-json --verbose --max-turns <N>
 ```
+
+**Особенности:**
+- Если задан `settings.customPromptFragment` — он добавляется в начало промпта (`fragment + '\n\n' + prompt`)
+- `--max-turns` добавляется только при `defaultMaxTurns > 0`
+- `--permission-mode` не передаётся — используются project-local `settings.json`/`settings.local.json` + PreToolUse hook
+- Сам бинарник `claude-sm` подставляет `RunProcess.spawn()`, а не `buildArgs()`
 
 ### 7.2 RunProcess
 
@@ -298,32 +351,38 @@ interface RunCallbacks {
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `spawn(projectPath, args, watchdogTimeoutMinutes)` | `(string, string[], number) => void` | Запускает `claude-sm` с pipe stdio. Начинает чтение stdout через `readline`. Запускает watchdog |
+| `spawn(projectPath, args, watchdogTimeoutMinutes)` | `(string, string[], number) => void` | Запускает `claude-sm` с pipe stdio. Читает stdout через `readline`. Запускает watchdog |
 | `cancel()` | `() => void` | SIGTERM → ожидание 5 сек → SIGKILL |
 | `getPid()` | `() => number \| null` | PID процесса или null |
 | `isRunning()` | `() => boolean` | Процесс жив и не завершился |
 
 #### Внутренняя логика spawn()
 
-1. Создаёт лог-файл `~/.claude/session-manager-logs/<workId>.log`
-2. `child_process.spawn('claude-sm', args, { cwd: projectPath, stdio: ['pipe', 'pipe', 'pipe'] })`
-3. **stdout:** построчное чтение через `readline`, каждая строка → `JSON.parse` → `onEvent(sessionId, event)`. Не-JSON строки игнорируются.
-4. **stderr:** пишется в лог-файл
-5. **exit:** классификация кода возврата:
-   - `cancelled=true` → reason=`stopped`
+1. Создаёт/дописывает лог-файл `~/.claude/session-manager-logs/<workId>.log`
+2. `child_process.spawn('claude-sm', args, { cwd: projectPath, env: { ...process.env, CLAUDECODE: '' }, stdio: ['pipe', 'pipe', 'pipe'] })` — `CLAUDECODE: ''` разрешает вложенные запуски
+3. **stdout:** построчное чтение через `readline`, каждая строка → `JSON.parse` → `onEvent(sessionId, event)`. Не-JSON строки игнорируются
+4. **stderr:** пишется в лог-файл; последние ~4000 символов хранятся в `stderrTail`
+5. **AskUserQuestion:** при `event.type === 'assistant'` с `tool_use` `AskUserQuestion` → `awaitingInput=true`, закрытие stdin, fallback-kill через 5 сек
+6. **exit:** классификация кода возврата:
+   - `awaitingInput` → reason=`ok`
+   - `timeoutOccurred` → reason=`timeout`
+   - `cancelled` → reason=`stopped`
    - `exitCode=0` → reason=`ok`
-   - `exitCode≠0` → reason=`error`
-6. **error:** событие `error` на процессе → reason=`error`, exitCode=-1
-7. **watchdog:** после каждого события сбрасывается таймер. Если stdout молчит > N минут → `cancel()` + reason=`timeout`
+   - `exitCode=127` → reason=`config` (command not found — обёртка/окружение сломаны)
+   - иначе → reason=`error`
+7. **error:** событие `error` на процессе → reason=`error`, exitCode=-1, `errorDetail` = сообщение
+8. **watchdog:** после каждого события сбрасывается таймер. Если stdout молчит > N минут → `timeoutOccurred=true` + `cancel()` (exit-обработчик выставит reason=`timeout`)
+9. `errorDetail` заполняется хвостом `stderrTail` для `error`/`config`
 
 #### Выходные типы
 
 ```typescript
-type RunReason = 'ok' | 'error' | 'timeout' | 'stopped';
+type RunReason = 'ok' | 'error' | 'timeout' | 'stopped' | 'config';
 
 interface RunResult {
   exitCode: number;
   reason: RunReason;
+  errorDetail?: string;
 }
 ```
 
@@ -337,16 +396,16 @@ interface RunResult {
 
 | Функция | Описание |
 |---------|---------|
-| `registerAllIPC(window: BrowserWindow)` | Регистрирует все `ipcMain.handle`, создаёт `WorkHandlerDeps` (spawnRun/cancelRun), управляет `activeRuns` Map |
-| `shutdownAllRuns()` | Вызывается при `before-quit`. Cancel всех активных Run'ов + пометка «приложение закрыто» |
-| `recoverStaleWorks()` | Вызывается при старте. Work'и с `status=IN_PROGRESS` или `currentRunPid != null` → `AWAITING_INPUT` + пометка «восстановлен после перезапуска» |
+| `registerAllIPC(window: BrowserWindow)` | Регистрирует `project`, `settings`, `skills` и `work` (через `WorkHandlerDeps`), управляет `activeRuns` Map |
+| `shutdownAllRuns()` | Вызывается при `before-quit`. Cancel всех активных Run'ов + пометка «приложение закрыто» + `releaseAllLocalSettings()` |
+| `recoverStaleWorks()` | Вызывается при старте. Work'и с `status=IN_PROGRESS` или `currentRunPid != null` → `AWAITING_INPUT` + «восстановлен»; для таких проектов `restoreLocalSettings()` |
 
 #### Внутренние функции (не экспортируются)
 
 | Функция | Описание |
 |---------|---------|
-| `spawnRun(workId, prompt)` | Создаёт `RunProcess`, передаёт колбэки, которые дёргают `WorkManager` и шлют IPC-события в renderer |
-| `cancelRun(workId)` | Отменяет Run и удаляет из `activeRuns` |
+| `spawnRun(workId, prompt)` | Cancel существующего Run (если есть), вычисляет `isResume = runCount > 0 && sessionFileExists(workId)`, `buildArgs()`, `acquireLocalSettings()`, создаёт `RunProcess`, передаёт колбэки |
+| `cancelRun(workId)` | Отменяет Run, удаляет из `activeRuns`, `releaseLocalSettings()` |
 | `sendWorkUpdate(workId)` | Шлёт событие `work:updated` в renderer |
 
 #### Состояние активных Run'ов
@@ -366,7 +425,7 @@ interface RunResult {
 |-------|-----------|---------|
 | `project:list` | — | `projectManager.listProjects()` |
 | `project:get` | `{ id }` | `projectManager.getProject(id)` |
-| `project:create` | `{ name, path, profile? }` | `projectManager.createProject()` + `claudeConfig.ensure()` |
+| `project:create` | `{ name, path, profile?, initRepo? }` | `projectManager.createProject()` + `claudeConfig.sync()` |
 | `project:delete` | `{ id }` | `projectManager.deleteProject(id)` |
 | `project:check-dirty` | `{ id }` | `gitService.isDirty(project.path)` |
 | `project:discard` | `{ id }` | `gitService.discardChanges(project.path)` |
@@ -380,25 +439,33 @@ interface RunResult {
 |-------|-----------|--------|
 | `work:list` | `{ projectId? }` | `workManager.listWorks(projectId)` |
 | `work:get` | `{ id }` | `workManager.getWork(id)` + `workManager.getLastResult(id)` |
-| `work:create` | `{ projectId, description, branchName }` | `createWork()` → `deps.spawnRun(work.id, work.description)` |
+| `work:create` | `{ projectId?, name?, description, directory? }` | `createWork()` → `deps.spawnRun(work.id, work.description)` |
 | `work:delete` | `{ id }` | `deps.cancelRun(id)` + `deleteWork(id)` |
 | `work:complete` | `{ id }` | `completeWork(id)` |
-| `work:respond` | `{ id, message }` | `markRunStarted()` + `ensureBranch()` + `deps.spawnRun(id, message)` |
+| `work:respond` | `{ id, message }` | `markRunStarted(id, 0)` + `deps.spawnRun(id, message)` |
 | `work:cancel` | `{ id }` | `deps.cancelRun(id)` + `markRunCompleted(id, 'остановлено пользователем')` |
-| `work:restart-run` | `{ id }` | `ensureBranch()` + `deps.spawnRun(id, work.description)` |
+| `work:restart-run` | `{ id }` | `deps.spawnRun(id, work.description)` |
+| `work:rename` | `{ id, name }` | `renameWork(id, name)` |
+| `work:history` | `{ id }` | `getFullHistory(id)` → `{ messages }` |
 
 #### `handlers/settings.ts` — `registerSettingsHandlers()`
 
 | Канал | Параметры | Логика |
 |-------|-----------|--------|
 | `settings:get` | — | `load().settings` |
-| `settings:update` | `Partial<Settings>` | Partial merge + save |
+| `settings:update` | `Partial<Settings>` | Partial merge + save; при смене `defaultProfile` — пересинхронизация `.claude`-конфига всех проектов |
+
+#### `handlers/skills.ts` — `registerSkillsHandlers()`
+
+| Канал | Параметры | Логика |
+|-------|-----------|--------|
+| `skills:list` | `{ projectPath? }` | `scanSkills(projectPath)` → `{ skills, builtIn }` |
 
 ### 8.3 Preload — `preload/index.ts`
 
-`contextBridge.exposeInMainWorld('electronAPI', { ... })` — проксирует все 17 invoke-команд и 4 подписки на события.
+`contextBridge.exposeInMainWorld('electronAPI', { ... })` — проксирует все 20 invoke-команд и 4 подписки на события.
 
-**Команды** (invoke): все методы `project*`, `work*`, `settings*` из таблицы выше.
+**Команды** (invoke): 7 `project*`, 10 `work*` (включая `workRename`, `workHistory`), 2 `settings*`, 1 `skillsList`.
 
 **События** (listener):
 - `onRunEvent(callback)` — каждое событие stream-json
@@ -414,25 +481,30 @@ interface RunResult {
 
 ```
 renderer/
-├── index.html       — DOM-структура: sidebar, views, dialog overlay, формы
-├── app.js           — Вся логика UI (~540 строк vanilla JS)
-├── api/ipc-client.ts — Типизированная обёртка window.electronAPI (TypeScript)
-└── styles.css       — Тёмная тема (~150 строк)
+├── index.html              — DOM-структура: sidebar, views, dialog overlay, формы
+├── app.js                  — Вся логика UI (~1050 строк vanilla JS)
+├── slash-autocomplete.js   — Автодополнение /-команд и скиллов (самодостаточный IIFE-модуль)
+├── api/ipc-client.ts       — Типизированная обёртка window.electronAPI (TypeScript)
+└── styles.css              — Тёмная тема (~330 строк)
 ```
 
-**Важно:** renderer исключён из компиляции TypeScript. `app.js` — чистый JavaScript, работает с `window.electronAPI` напрямую. `ipc-client.ts` — декларация типов и экспорт `api` для статического анализа, но в рантайме `app.js` вызывает `window.electronAPI` напрямую.
+**Важно:** renderer исключён из компиляции TypeScript. `app.js` и `slash-autocomplete.js` — чистый JavaScript, работают с `window.electronAPI` напрямую. `ipc-client.ts` — декларация типов и экспорт `api` для статического анализа, но в рантайме `app.js` вызывает `window.electronAPI` напрямую.
 
 ### 9.2 Состояние UI (app.js)
 
 ```javascript
 state = {
   projects: [],            // Project[]
-  works: [],               // Work[]
+  works: [],               // Work[] (текущего проекта или все активные)
+  activeWorks: [],         // все non-COMPLETED работы для sidebar
   selectedProjectId: null,
   selectedWorkId: null,
   activeRuns: {},          // { [workId]: { events: StreamEvent[] } }
   settings: {},            // Settings
-  currentView: 'works',    // 'works' | 'project-create' | 'settings'
+  skillsCache: { skills: [], builtIn: [] },
+  currentView: 'works',    // 'works' | 'project-create' | 'settings' | 'new-ui'
+  viewingActive: false,    // выбран ли "Active Works" в sidebar
+  uiMode: 'classic',       // 'classic' | 'new'
 }
 ```
 
@@ -441,24 +513,39 @@ state = {
 | Функция | Описание |
 |---------|---------|
 | `loadProjects()` | Загружает проекты через `api.projectList()`, рендерит sidebar |
-| `loadWorks()` | Загружает Work'и выбранного проекта, рендерит список |
+| `loadWorks()` | Загружает Work'и выбранного проекта (или активные), рендерит список |
+| `loadActiveWorks()` | Загружает все non-COMPLETED работы в боковую панель |
 | `loadSettings()` | Загружает настройки, рендерит форму |
-| `renderProjectList()` | Отрисовка боковой панели: имя проекта + кнопка удаления |
-| `renderWorkList()` | Список Work: описание, ветка, количество Run'ов, дата, статус |
-| `renderWorkDetail(work, lastResult)` | Детальный вид: статус, прогресс/ответ/результат в зависимости от статуса |
-| `renderStreamEvent(event)` | Отрисовка одного события stream-json: system, assistant (thinking свёрнут), result |
-| `renderStatusBadge(status, note)` | Цветной badge: зелёный/оранжевый/серый |
+| `loadSkills()` | Загружает скиллы через `api.skillsList()` в `skillsCache` |
+| `initSlashAutocomplete()` | Подключает `SlashAutocomplete.attach()` к полям ввода |
+| `renderProjectList()` | Отрисовка боковой панели проектов: имя + кнопка удаления |
+| `renderActiveWorksSidebar()` | Отрисовка панели активных работ |
+| `renderWorkList()` | Список Work: имя, ветка, Run-кол-во, дата, проект, статус |
+| `renderWorkDetail(work, lastResult)` | Детальный вид в зависимости от статуса |
+| `renderWorkHistory(workId)` | Полная история сессии (user → assistant/result) через `workHistory` |
+| `renderStreamEvent(event)` | Отрисовка одного события stream-json (thinking свёрнут, tool_use, result) |
+| `renderStatusBadge(status, note)` | Цветной badge |
 | `showDialog(title, bodyHTML, buttons)` | Модальный диалог |
 | `handleError(err, context)` | Классификация ошибок: DirtyRepoError (с Discard), BranchExistsError, GitNotFoundError, generic |
+| `switchUIMode(mode)` / `applyUIMode()` | Переключение/применение `uiMode` (classic/new) |
 | `bindEvents()` | Подписка на 4 IPC-события от Main |
 
-### 9.4 Представления (Views)
+### 9.4 Slash Autocomplete (`slash-autocomplete.js`)
+
+Самодостаточный IIFE-модуль `SlashAutocomplete` (глобально `window.SlashAutocomplete`). Метод `attach(textarea, button, skillsCache)`:
+- Кнопка `/` открывает выпадающий список
+- При вводе `/<query>` фильтрует `skills` + `builtIn` по префиксу
+- Навигация стрелками, выбор Enter/Tab, закрытие Escape/blur
+- Подстановка `/<name> ` в textarea с учётом пробела-разделителя
+
+### 9.5 Представления (Views)
 
 | View | DOM ID | Когда показан |
 |------|--------|--------------|
 | Works | `#view-works` | Основной экран: список Work + detail |
 | Project Create | `#view-project-create` | Форма создания проекта |
 | Settings | `#view-settings` | Форма настроек |
+| New UI | `#view-new-ui` | Плейсхолдер будущего интерфейса (по `uiMode === 'new'`) |
 
 ---
 
@@ -466,13 +553,14 @@ state = {
 
 ```typescript
 app.whenReady() → createWindow()
-  ├── new BrowserWindow({ preload, contextIsolation: true, nodeIntegration: false })
+  ├── new BrowserWindow({ preload, contextIsolation: true, nodeIntegration: false, 1200×800 })
   ├── mainWindow.loadFile('renderer/index.html')
   ├── registerAllIPC(mainWindow)
   └── recoverStaleWorks()
 
 app.on('before-quit') → shutdownAllRuns()
 app.on('window-all-closed') → app.quit()
+app.on('activate') → recreate window if closed
 ```
 
 ---
@@ -485,17 +573,16 @@ app.on('window-all-closed') → app.quit()
 Renderer                          Main                              OS
 ───────                          ──────                             ────
 work:create ──────► handler ──► createWork()
-  {projectId,                      │ валидация
-   description,                    │ git branch create
-   branchName}                     │ Work → store
-                                   ▼
+  {projectId?,                      │ авто-создание проекта (directory)
+   name?,                           │ запись текущей ветки
+   description,                     │ Work → store
+   directory?}                      ▼
                               spawnRun(workId, description)
-                                   │
-                              buildArgs() → ['--session-id', uuid, '-p', desc, ...]
-                                   │
-                              new RunProcess(callbacks, workId)
-                                   │
-                              rp.spawn(projectPath, args, timeout)
+                                   │ isResume = runCount>0 && sessionFileExists()
+                                   │ buildArgs() → ['--session-id', uuid, '-p', desc, ...]
+                                   │ acquireLocalSettings(project.path)
+                                   │ new RunProcess(callbacks, workId)
+                                   │ rp.spawn(projectPath, args, timeout)
                                    │
                                    ├──► spawn('claude-sm', args, { cwd, stdio: 'pipe' })
                                    │         │
@@ -509,19 +596,20 @@ work:create ──────► handler ──► createWork()
                                    ├── exit(code)
                                    │
 ◄── run:completed ─── onCompleted ─┘
-  {workId, exitCode, reason}
+  {workId, exitCode, reason, errorDetail}
 ◄── work:updated
   {work}
+                                   │
+                              releaseLocalSettings(project.path)
 ```
 
 ### 11.2 Ответ пользователя (resume)
 
 ```
-work:respond ────► handler ──► markRunStarted() + ensureBranch()
+work:respond ────► handler ──► markRunStarted(id, 0) + spawnRun(id, message)
   {id, message}                  │
                                  ▼
-                            spawnRun(workId, message)
-                                 │
+                            isResume = runCount>0 && sessionFileExists(id)
                             buildArgs(..., isResume=true)
                             → ['--resume', uuid, '-p', message, ...]
                                  │
@@ -537,7 +625,9 @@ app.on('before-quit')
         │
         for each activeRuns:
           ├── rp.cancel()  → SIGTERM → 5s → SIGKILL
-          └── markCompleted(workId, 'приложение закрыто')
+          └── updateWorkDirect(id, → AWAITING_INPUT + note='приложение закрыто')
+        │
+        └── releaseAllLocalSettings()   // восстановить settings.local.json во всех проектах
 ```
 
 ### 11.4 Recovery
@@ -549,7 +639,8 @@ app.whenReady()
         │
         for each work in store:
           if status === 'IN_PROGRESS' || currentRunPid !== null:
-            └── updateWorkDirect(id, w → AWAITING_INPUT + note='восстановлен')
+            ├── updateWorkDirect(id, → AWAITING_INPUT + note='восстановлен после перезапуска')
+            └── restoreLocalSettings(project.path)  // если остался .backup
 ```
 
 ---
@@ -560,9 +651,12 @@ app.whenReady()
 |------|--------|----------|-----------|
 | `~/.claude/session-manager.json` | JSON | `store.ts` | Состояние приложения: проекты, Work, настройки |
 | `~/.claude/session-manager-logs/app.log` | Text | `logger.ts` | Логи приложения |
-| `~/.claude/session-manager-logs/<workId>.log` | Text | `run-process.ts` | stderr + логи конкретного Run |
-| `~/.claude/projects/<slug>/<uuid>.jsonl` | JSONL | Claude Code | Сессионные данные (читаются `getLastResult()`) |
+| `~/.claude/session-manager-logs/<workId>.log` | Text | `run-process.ts` | stdout/stderr + логи конкретного Run |
+| `~/.claude/projects/<slug>/<uuid>.jsonl` | JSONL | Claude Code | Сессионные данные (читаются `getLastResult()` / `getFullHistory()`) |
+| `~/.claude/skills/<skill>/SKILL.md` | Markdown | Claude Code | Глобальные скиллы (сканируются `skill-scanner.ts`) |
+| `<project>/.claude/skills/<skill>/SKILL.md` | Markdown | Claude Code | Проектные скиллы |
 | `<project>/.claude/settings.json` | JSON | `claude-config.ts` | Разрешения Claude Code для проекта |
+| `<project>/.claude/settings.local.json` (+`.backup`) | JSON | `claude-config.ts` | Временные permissive-разрешения на время Run |
 | `<project>/.claude/hooks/classify-bash.sh` | Shell | `claude-config.ts` | Классификатор Bash-команд |
 
 ---
@@ -575,21 +669,24 @@ app.whenReady()
 |-------|---------|----------|
 | `project:list` | — | `Project[]` |
 | `project:get` | `{ id }` | `Project` |
-| `project:create` | `{ name, path, profile? }` | `Project` |
+| `project:create` | `{ name, path, profile?, initRepo? }` | `Project` |
 | `project:delete` | `{ id }` | `void` |
 | `project:check-dirty` | `{ id }` | `{ isDirty, files }` |
 | `project:discard` | `{ id }` | `void` |
 | `project:check-branch` | `{ id, branchName }` | `{ exists }` |
 | `work:list` | `{ projectId? }` | `Work[]` |
 | `work:get` | `{ id }` | `{ work, lastResult }` |
-| `work:create` | `{ projectId, description, branchName }` | `Work` |
+| `work:create` | `{ projectId?, name?, description, directory? }` | `Work` |
 | `work:delete` | `{ id }` | `void` |
 | `work:complete` | `{ id }` | `void` |
 | `work:respond` | `{ id, message }` | `void` |
 | `work:cancel` | `{ id }` | `void` |
 | `work:restart-run` | `{ id }` | `void` |
+| `work:rename` | `{ id, name }` | `void` |
+| `work:history` | `{ id }` | `{ messages: HistoryEntry[] }` |
 | `settings:get` | — | `Settings` |
 | `settings:update` | `Partial<Settings>` | `Settings` |
+| `skills:list` | `{ projectPath? }` | `{ skills, builtIn }` |
 
 ### События (Main → Renderer, `webContents.send`)
 
@@ -597,7 +694,7 @@ app.whenReady()
 |-------|---------|-------|
 | `run:started` | `{ workId }` | Run начался |
 | `run:event` | `{ workId, event }` | Каждая строка stream-json |
-| `run:completed` | `{ workId, exitCode, reason }` | Run завершился |
+| `run:completed` | `{ workId, exitCode, reason, errorDetail? }` | Run завершился |
 | `work:updated` | `{ work }` | Изменился Work |
 
 ---
@@ -611,7 +708,10 @@ app.whenReady()
 | `GitNotFoundError` | `GIT_NOT_FOUND` | "Git is not installed" | OK |
 | `DirtyRepoError` | `DIRTY_REPO` | Список файлов | Discard / Cancel |
 | `BranchExistsError` | `BRANCH_EXISTS` | "Ветка уже существует" | OK |
+| `CheckoutError` | `CHECKOUT_ERROR` | "Не удалось переключиться на ветку" | OK |
 | Generic Error | — | `message` или `userMessage` | OK |
+
+**Примечание:** ошибки Run не бросаются как exception, а доставляются через событие `run:completed` с полем `reason` (`'ok' | 'error' | 'timeout' | 'stopped' | 'config'`) и `errorDetail` (хвост stderr для `error`/`config`).
 
 ---
 
@@ -633,7 +733,7 @@ app.whenReady()
 ### Добавление нового профиля разрешений
 1. Добавить значение в `Profile` union type в `claude-config.ts`
 2. Добавить whitelist в `PROFILE_WHITELIST`
-3. Добавить опцию в `<select id="proj-profile">` в `index.html`
+3. Добавить опцию в `<select id="proj-profile">` и `<select id="set-profile">` в `index.html`
 
 ### Изменение модели данных Work
 1. Изменить `Work` в `shared/types.ts`
@@ -643,3 +743,12 @@ app.whenReady()
 ### Добавление нового события stream-json в UI
 1. Расширить `renderStreamEvent()` в `app.js` — добавить новый `if (event.type === '...')`
 2. При необходимости — новый CSS-класс в `styles.css`
+
+### Добавление нового источника скиллов
+1. Расширить `scanSkills()` / `scanDirectory()` в `skill-scanner.ts`
+2. При необходимости — новые built-in команды в `BUILT_IN_COMMANDS`
+
+### Добавление нового режима UI
+1. Добавить view в `index.html`
+2. Добавить case в `showView()` в `app.js`
+3. При необходимости — расширить `uiMode` union type в `shared/types.ts`
