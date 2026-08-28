@@ -5,3 +5,4 @@ release/
 *.d.ts
 .idea/
 .claude/
+.workflow/
