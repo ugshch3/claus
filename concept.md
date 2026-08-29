@@ -64,7 +64,7 @@ Desktop-приложение (Electron), которое становится е�
 2. Приложение генерирует в проекте `.claude/settings.json` и `.claude/hooks/classify-bash.sh` с whitelist'ом `gradlew`/`adb`.
 3. Пользователь создаёт Work: описание задачи («Добавь экран авторизации»).
 4. Приложение проверяет dirty-репозиторий; если есть изменения — диалог Discard/Cancel.
-5. Запускается Run: `claude-sm -p "<описание>" --output-format stream-json --verbose` в cwd проекта.
+5. Запускается Run: `claude -p "<описание>" --output-format stream-json --verbose` в cwd проекта (команда запуска настраивается: `claude` / `claude-sm` / произвольная).
 6. Renderer показывает поток событий: `system/init` → `assistant` (думает) → `tool_use` (читает/редактирует) → `result`.
 7. Run завершается → Work переходит в `AWAITING_INPUT`, показывается последний результат.
 8. Пользователь отвечает («Переделай на Compose») → новый Run с `--resume <session_id>`.
@@ -82,18 +82,18 @@ IN_PROGRESS  →  (Run завершился)  →  AWAITING_INPUT  →  (отв�
 
 **Жизненный цикл Run (внутри `run-process.ts`):**
 
-1. `spawn('claude-sm', args, { cwd })` → открывается лог `<workId>.log`.
+1. `spawn(command, args, { cwd })` — команда из настроек → открывается лог `<workId>.log`.
 2. stdout разбирается построчно как `StreamEvent` (JSON); не-JSON игнорируется, stderr копится в хвост.
 3. Watchdog: молчание дольше N минут → `timeoutOccurred` → отмена.
 4. Обнаружение `AskUserQuestion` → `awaitingInput` → закрытие stdin.
-5. Классификация выхода: `awaitingInput`→`ok`, `timeout`→`timeout`, `cancelled`→`stopped`, exit 0→`ok`, exit 127→`config`, иначе→`error`.
+5. Классификация выхода: `awaitingInput`→`ok`, `timeout`→`timeout`, `cancelled`→`stopped`, exit 0→`ok`, exit 127 или `ENOENT`→`config`, иначе→`error`.
 6. События `run:started` / `run:event` / `run:completed` + `work:updated` уходят в renderer.
 
 ### 7.3 Интеграции с внешними системами
 
 | Система | Тип | Протокол | Auth |
 |---------|-----|----------|------|
-| Claude Code CLI (`claude-sm`) | Дочерний процесс | `child_process.spawn`, stream-json на stdout | Локальная (без явной auth — использует окружение пользователя) |
+| Claude Code CLI (`claude`, `claude-sm` или произвольная команда) | Дочерний процесс | `child_process.spawn`, stream-json на stdout | Локальная (без явной auth — использует окружение пользователя) |
 | Git (`git`) | CLI | `execSync` (status/checkout/branch/clean/init/fetch) | Локальная (SSH/HTTPS пользователя) |
 | Файловая система (`~/.claude/projects/<slug>/<uuid>.jsonl`) | Чтение файлов | JSONL | Локальная |
 | MCP-серверы (имена из `~/.claude.json`) | Конфигурация | Чтение JSON-конфига | Локальная (имена серверов) |

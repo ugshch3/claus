@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: Settings = {
   defaultProfile: 'generic',
   customPromptFragment: '',
   uiMode: 'classic',
+  claudeCommandMode: 'claude',
+  claudeCommandCustom: '',
 };
 
 function getDefaultData(): AppData {
@@ -34,7 +36,9 @@ export function load(): AppData {
     if (data.version !== CURRENT_VERSION) {
       return migrate(data);
     }
-    return data;
+    // Мерджим дефолты: в файле, записанном прошлой версией приложения,
+    // новых полей settings нет — без этого они приедут как undefined.
+    return { ...data, settings: { ...DEFAULT_SETTINGS, ...data.settings } };
   } catch (err) {
     console.error('Failed to load session-manager.json, using defaults:', err);
     return getDefaultData();

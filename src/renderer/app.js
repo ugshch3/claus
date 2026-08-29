@@ -553,13 +553,27 @@ function bindForms() {
   });
 
   // Settings form
+  document.getElementById('set-claude-command-mode').addEventListener('change', () => {
+    toggleClaudeCommandCustom();
+  });
+
   document.getElementById('form-settings').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const commandMode = document.getElementById('set-claude-command-mode').value;
+    const commandCustom = document.getElementById('set-claude-command-custom').value.trim();
+    if (commandMode === 'custom' && !commandCustom) {
+      showDialog('Claude command', '<p>Укажите команду или абсолютный путь для режима Custom.</p>', [
+        { label: 'OK' },
+      ]);
+      return;
+    }
     const settings = {
       watchdogTimeoutMinutes: parseInt(document.getElementById('set-watchdog').value) || 10,
       defaultMaxTurns: parseInt(document.getElementById('set-max-turns').value) || 25,
       defaultProfile: document.getElementById('set-profile').value,
       customPromptFragment: document.getElementById('set-custom-prompt').value,
+      claudeCommandMode: commandMode,
+      claudeCommandCustom: commandCustom,
     };
     state.settings = await api.settingsUpdate(settings);
     renderSettingsForm();
@@ -991,6 +1005,19 @@ function renderSettingsForm() {
   document.getElementById('set-max-turns').value = state.settings.defaultMaxTurns;
   document.getElementById('set-profile').value = state.settings.defaultProfile;
   document.getElementById('set-custom-prompt').value = state.settings.customPromptFragment || '';
+  document.getElementById('set-claude-command-mode').value =
+    state.settings.claudeCommandMode || 'claude';
+  document.getElementById('set-claude-command-custom').value =
+    state.settings.claudeCommandCustom || '';
+  toggleClaudeCommandCustom();
+}
+
+// Поле произвольной команды показываем только в режиме Custom.
+function toggleClaudeCommandCustom() {
+  const isCustom = document.getElementById('set-claude-command-mode').value === 'custom';
+  document
+    .getElementById('set-claude-command-custom-row')
+    .classList.toggle('hidden', !isCustom);
 }
 
 // ---- IPC Events (Main → Renderer) ----

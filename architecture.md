@@ -53,7 +53,7 @@
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `load()` | `() => AppData` | Загружает данные из файла. Если файла нет — возвращает default (version=1, projects=[], works=[], settings=defaults). При несовпадении версии вызывает `migrate()` |
+| `load()` | `() => AppData` | Загружает данные из файла. Если файла нет — возвращает default (version=1, projects=[], works=[], settings=defaults). При несовпадении версии вызывает `migrate()`. Загруженные `settings` мерджатся поверх дефолтов, чтобы поля, добавленные новой версией приложения, не приезжали `undefined` |
 | `save(data)` | `(data: AppData) => void` | Атомарно пишет данные во временный файл, затем переименовывает в целевой |
 | `getProjects()` | `() => Project[]` | Shortcut: `load().projects` |
 | `getWorks()` | `() => Work[]` | Shortcut: `load().works` |
@@ -84,7 +84,15 @@ interface Settings {
   defaultProfile: string;          // 'android' | 'frontend' | 'python' | 'generic'
   customPromptFragment: string;    // default '' — добавляется в начало каждого промпта
   uiMode: 'classic' | 'new';       // default 'classic'
+  claudeCommandMode: ClaudeCommandMode;  // default 'claude'
+  claudeCommandCustom: string;     // default '' — используется только при mode='custom'
 }
+
+// Как запускать Claude Code:
+// 'claude'    — обычный CLI из PATH (окружение настраивать не нужно)
+// 'claude-sm' — shell-враппер ~/.local/bin/claude-sm (сорсит shell-snapshot)
+// 'custom'    — произвольная команда или абсолютный путь из claudeCommandCustom
+type ClaudeCommandMode = 'claude' | 'claude-sm' | 'custom';
 
 interface StreamEvent {
   type: string;
@@ -97,8 +105,8 @@ interface HistoryEntry {
 }
 
 type RunReason = 'ok' | 'error' | 'timeout' | 'stopped' | 'config';
-// 'config' — обёртка/окружение сломаны (напр. claude-sm вышел с кодом 127,
-// command not found). Отличаем от обычной ошибки Claude.
+// 'config' — команда запуска не найдена или окружение сломано (ENOENT при spawn,
+// либо выход с кодом 127 из shell-враппера). Отличаем от обычной ошибки Claude.
 
 interface RunResult {
   exitCode: number;
@@ -305,7 +313,7 @@ interface Work {
 
 ---
 
-## 7. Слой Run — `run/run-process.ts` + `run/args-builder.ts`
+## 7. Слой Run — `run/run-process.ts` + `run/args-builder.ts` + `run/command.ts`
 
 ### 7.1 ArgsBuilder
 
@@ -327,11 +335,11 @@ interface Work {
 - Если задан `settings.customPromptFragment` — он добавляется в начало промпта (`fragment + '\n\n' + prompt`)
 - `--max-turns` добавляется только при `defaultMaxTurns > 0`
 - `--permission-mode` не передаётся — используются project-local `settings.json`/`settings.local.json` + PreToolUse hook
-- Сам бинарник `claude-sm` подставляет `RunProcess.spawn()`, а не `buildArgs()`
+- Сам бинарник подставляет `RunProcess.spawn()`, а не `buildArgs()` — команда приходит из `resolveClaudeCommand()`
 
 ### 7.2 RunProcess
 
-Класс, управляющий одним подпроцессом `claude-sm`.
+Класс, управляющий одним подпроцессом Claude CLI (команда — из настроек).
 
 #### Конструктор
 ```typescript
@@ -351,7 +359,7 @@ interface RunCallbacks {
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `spawn(projectPath, args, watchdogTimeoutMinutes)` | `(string, string[], number) => void` | Запускает `claude-sm` с pipe stdio. Читает stdout через `readline`. Запускает watchdog |
+| `spawn(projectPath, args, watchdogTimeoutMinutes, command)` | `(string, string[], number, string) => void` | Запускает `command` с pipe stdio. Читает stdout через `readline`. Запускает watchdog |
 | `cancel()` | `() => void` | SIGTERM → ожидание 5 сек → SIGKILL |
 | `getPid()` | `() => number \| null` | PID процесса или null |
 | `isRunning()` | `() => boolean` | Процесс жив и не завершился |
@@ -359,7 +367,7 @@ interface RunCallbacks {
 #### Внутренняя логика spawn()
 
 1. Создаёт/дописывает лог-файл `~/.claude/session-manager-logs/<workId>.log`
-2. `child_process.spawn('claude-sm', args, { cwd: projectPath, env: { ...process.env, CLAUDECODE: '' }, stdio: ['pipe', 'pipe', 'pipe'] })` — `CLAUDECODE: ''` разрешает вложенные запуски
+2. `child_process.spawn(command, args, { cwd: projectPath, env: { ...process.env, CLAUDECODE: '', PATH: buildSpawnPath() }, stdio: ['pipe', 'pipe', 'pipe'] })` — `CLAUDECODE: ''` разрешает вложенные запуски, расширенный `PATH` спасает от урезанного окружения GUI-запуска
 3. **stdout:** построчное чтение через `readline`, каждая строка → `JSON.parse` → `onEvent(sessionId, event)`. Не-JSON строки игнорируются
 4. **stderr:** пишется в лог-файл; последние ~4000 символов хранятся в `stderrTail`
 5. **AskUserQuestion:** при `event.type === 'assistant'` с `tool_use` `AskUserQuestion` → `awaitingInput=true`, закрытие stdin, fallback-kill через 5 сек
@@ -386,6 +394,13 @@ interface RunResult {
 }
 ```
 
+### 7.3 command.ts
+
+| Метод | Сигнатура | Описание |
+|-------|-----------|---------|
+| `resolveClaudeCommand(settings)` | `(Settings) => string` | Разрешает команду запуска: `claude` / `claude-sm` / значение `claudeCommandCustom`. Пустой custom → fallback на `claude` (вместо `spawn(undefined)`) |
+| `buildSpawnPath()` | `() => string` | `PATH` для дочернего процесса: унаследованный `PATH` + типовые места установки CLI (`~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`). Нужен потому, что запуск `.app` из Finder даёт урезанный `PATH` без пользовательских каталогов |
+
 ---
 
 ## 8. Слой IPC — `ipc/`
@@ -404,7 +419,7 @@ interface RunResult {
 
 | Функция | Описание |
 |---------|---------|
-| `spawnRun(workId, prompt)` | Cancel существующего Run (если есть), вычисляет `isResume = runCount > 0 && sessionFileExists(workId)`, `buildArgs()`, `acquireLocalSettings()`, создаёт `RunProcess`, передаёт колбэки |
+| `spawnRun(workId, prompt)` | Cancel существующего Run (если есть), вычисляет `isResume = runCount > 0 && sessionFileExists(workId)`, `resolveClaudeCommand()`, `buildArgs()`, `acquireLocalSettings()`, создаёт `RunProcess`, передаёт колбэки |
 | `cancelRun(workId)` | Отменяет Run, удаляет из `activeRuns`, `releaseLocalSettings()` |
 | `sendWorkUpdate(workId)` | Шлёт событие `work:updated` в renderer |
 
@@ -582,12 +597,13 @@ work:create ──────► handler ──► createWork()
                                    │ buildArgs() → ['--session-id', uuid, '-p', desc, ...]
                                    │ acquireLocalSettings(project.path)
                                    │ new RunProcess(callbacks, workId)
-                                   │ rp.spawn(projectPath, args, timeout)
+                                   │ command = resolveClaudeCommand(settings)
+                                   │ rp.spawn(projectPath, args, timeout, command)
                                    │
-                                   ├──► spawn('claude-sm', args, { cwd, stdio: 'pipe' })
+                                   ├──► spawn(command, args, { cwd, stdio: 'pipe' })
                                    │         │
 ◄── run:started ────── onStarted ─┘         ▼
-  {workId}                              claude-sm process
+  {workId}                              claude CLI process
                                    │         │
 ◄── run:event ──────── onEvent ◄───readline──┘
   {workId, event}                      stdout JSONL

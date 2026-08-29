@@ -17,18 +17,24 @@ git add . && git commit -m "initial commit"
 
 ### 1.2. Команда Claude
 
-Приложение запускает `claude-sm` через `child_process.spawn`. Это shell-скрипт-враппер, который подхватывает окружение `claude-deepseek-v4` из снепшота shell-функций.
+Команда запуска задаётся в Settings → **Claude command**:
+
+| Режим | Команда | Когда нужен |
+|-------|---------|-------------|
+| `claude` (по умолчанию) | `claude` из `PATH` | Обычный CLI, настройка окружения не требуется |
+| `claude-sm` | `~/.local/bin/claude-sm` | Shell-враппер: сорсит свежий snapshot из `~/.claude/shell-snapshots/` и вызывает shell-функцию (напр. другую модель) |
+| `Custom…` | Произвольное имя или абсолютный путь | Другая сборка CLI или иной инструмент |
 
 ```bash
-# Убедись, что враппер работает:
-which claude-sm
-# → /Users/k.chernyadiev/.local/bin/claude-sm
+# Проверь выбранную команду перед тестом:
+which claude
+# → /opt/homebrew/bin/claude
 
-claude-sm --version
-# → 2.1.62 (Claude Code)
+claude --version
+# → 2.1.251 (Claude Code)
 ```
 
-Враппер находится в `~/.local/bin/claude-sm`. Если нужно использовать другую модель — отредактируй `~/.local/bin/claude-sm` (вызов функции в последней строке).
+Приложение расширяет `PATH` дочернего процесса каталогами `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin` — запуск собранного `.app` из Finder иначе получает урезанный `PATH`. Для режима `claude-sm` модель меняется правкой последней строки `~/.local/bin/claude-sm`.
 
 ### 1.3. Изоляция
 
@@ -221,6 +227,6 @@ npm start
 | Run не стартует | `~/.claude/session-manager-logs/<workId>.log` — stderr от Claude Code |
 | Run висит бесконечно | Watchdog должен сработать через N минут, либо нажать «Stop Run» |
 | Ошибка «Git не установлен» | `which git`, `git --version` |
-| Ошибка spawn `claude-sm` | `which claude-sm` — скрипт должен быть в `~/.local/bin/claude-sm` |
+| Run падает со статусом «config» | Команда из Settings → Claude command не найдена: проверь `which <команда>`; для `claude-sm` скрипт должен лежать в `~/.local/bin/claude-sm` |
 | Error диалог не появляется | DevTools в Electron: `Cmd+Opt+I` → Console |
 | Снепшот не найден | `ls ~/.claude/shell-snapshots/` — должен быть хотя бы один файл |

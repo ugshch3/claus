@@ -143,3 +143,8 @@
 - **Приоритет:** —
 - **Описание:** Unit и integration тесты для main-процесса (`args-builder`, `work-manager`, `skill-scanner`, `claude-config`).
 - **Затронутые файлы:** `package.json` (тест-скрипт + фреймворк), тесты рядом с `src/main/**`
+
+### P11 — Абстракция раннера: разные CLI (Claude Code, opencode и др.)
+- **Приоритет:** —
+- **Описание:** Сейчас поддерживается выбор только исполняемого файла Claude Code (`claudeCommandMode` = `claude` / `claude-sm` / `custom`), но флаги, формат потока событий и способ resume захардкожены под Claude Code. Нужна абстракция «раннер/адаптер»: описание инструмента (команда, шаблон аргументов, формат вывода, флаг resume, поддержка `--max-turns`) + нормализация его вывода в общий `StreamEvent`. Первые адаптеры — Claude Code (headless `-p` + `stream-json`) и opencode. Дополнительно: выбор раннера на уровне проекта (override глобальной настройки), проверка доступности команды (`--version`) в UI и per-раннер маппинг exit-кодов в `RunReason`.
+- **Затронутые файлы:** `src/main/run/command.ts`, `src/main/run/args-builder.ts`, `src/main/run/run-process.ts`, `src/main/ipc/register.ts`, `src/shared/types.ts`, `src/renderer/app.js`, `src/renderer/index.html`

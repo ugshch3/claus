@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { RunProcess } from '../run/run-process';
 import { buildArgs } from '../run/args-builder';
+import { resolveClaudeCommand } from '../run/command';
 import { getWork, markRunStarted, markRunCompleted, listWorks, updateWorkDirect, sessionFileExists } from '../work/work-manager';
 import { getProject } from '../project/project-manager';
 import { load, save } from '../storage/store';
@@ -109,6 +110,7 @@ function spawnRun(workId: string, prompt: string): void {
   if (!project) throw new Error(`Проект для Work '${workId}' не найден`);
 
   const settings = load().settings;
+  const command = resolveClaudeCommand(settings);
 
   // Cancel existing run if any
   if (activeRuns.has(workId)) {
@@ -145,12 +147,12 @@ function spawnRun(workId: string, prompt: string): void {
           error: 'ошибка',
           timeout: 'таймаут',
           stopped: 'остановлено',
-          config: 'wrapper misconfigured',
+          config: `'${command}' не найдена`,
         };
         if (result.reason === 'config') {
           logError(
-            `Run ${workId} failed with exit 127 (command not found) — ` +
-            `claude-sm wrapper / environment misconfigured`,
+            `Run ${workId} failed: command '${command}' not found or ` +
+            `environment misconfigured (exit ${result.exitCode})`,
             result.errorDetail
           );
         }
@@ -169,7 +171,7 @@ function spawnRun(workId: string, prompt: string): void {
     workId
   );
 
-  rp.spawn(project.path, args, settings.watchdogTimeoutMinutes);
+  rp.spawn(project.path, args, settings.watchdogTimeoutMinutes, command);
   activeRuns.set(workId, rp);
 }
 

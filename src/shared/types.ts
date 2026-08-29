@@ -25,12 +25,22 @@ export interface Work {
   completedAt: string | null;
 }
 
+/**
+ * Как запускать Claude Code:
+ * 'claude'    — обычный CLI из PATH (окружение настраивать не нужно);
+ * 'claude-sm' — shell-враппер ~/.local/bin/claude-sm (сорсит shell-snapshot);
+ * 'custom'    — произвольная команда или абсолютный путь из claudeCommandCustom.
+ */
+export type ClaudeCommandMode = 'claude' | 'claude-sm' | 'custom';
+
 export interface Settings {
   watchdogTimeoutMinutes: number;
   defaultMaxTurns: number;
   defaultProfile: string;
   customPromptFragment: string;
   uiMode: 'classic' | 'new';
+  claudeCommandMode: ClaudeCommandMode;
+  claudeCommandCustom: string;   // используется только при claudeCommandMode === 'custom'
 }
 
 export interface StreamEvent {
@@ -51,8 +61,9 @@ export interface AppData {
   settings: Settings;
 }
 
-// 'config' — обёртка/окружение сломаны (напр. claude-sm вышел с кодом 127,
-// command not found). Отличаем от обычной ошибки Claude, чтобы дать понятный статус.
+// 'config' — команда запуска не найдена или окружение сломано (ENOENT при spawn,
+// либо выход с кодом 127 из shell-враппера). Отличаем от обычной ошибки Claude,
+// чтобы дать понятный статус.
 export type RunReason = 'ok' | 'error' | 'timeout' | 'stopped' | 'config';
 
 export interface RunResult {

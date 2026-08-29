@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { StreamEvent, RunResult, RunReason } from '../../shared/types';
+import { buildSpawnPath } from './command';
 
 const LOG_DIR = path.join(os.homedir(), '.claude', 'session-manager-logs');
 
@@ -30,9 +31,15 @@ export class RunProcess {
   }
 
   /**
-   * Spawn claude -p with stream-json output.
+   * Spawn the Claude CLI with -p and stream-json output.
+   * `command` — исполняемый файл из настроек (claude / claude-sm / custom).
    */
-  spawn(projectPath: string, args: string[], watchdogTimeoutMinutes: number): void {
+  spawn(
+    projectPath: string,
+    args: string[],
+    watchdogTimeoutMinutes: number,
+    command: string
+  ): void {
     // Ensure log directory exists
     if (!fs.existsSync(LOG_DIR)) {
       fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -45,14 +52,14 @@ export class RunProcess {
 
     const startTime = Date.now();
     logStream.write(`\n=== Run started at ${new Date().toISOString()} ===\n`);
-    logStream.write(`Command: claude ${args.join(' ')}\n\n`);
+    logStream.write(`Command: ${command} ${args.join(' ')}\n\n`);
 
-    // Use claude-sm wrapper (sources shell snapshot + claude-deepseek-v4)
-    this.process = spawn('claude-sm', args, {
+    this.process = spawn(command, args, {
       cwd: projectPath,
       env: {
         ...process.env,
         CLAUDECODE: '', // allow nested runs from our app
+        PATH: buildSpawnPath(),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -122,8 +129,8 @@ export class RunProcess {
       } else if (exitCode === 0) {
         reason = 'ok';
       } else if (exitCode === 127) {
-        // 127 = command not found. Almost always the claude-sm wrapper /
-        // environment is misconfigured — not a real Claude error.
+        // 127 = command not found — так падает shell-враппер (claude-sm), когда
+        // не находит вызываемую функцию. Проблема окружения, не ошибка Claude.
         reason = 'config';
       } else {
         reason = 'error';
@@ -149,9 +156,15 @@ export class RunProcess {
       rl.close();
       logStream.end();
 
+      // ENOENT = бинарника нет в PATH, EACCES = найден, но не исполняемый.
+      // И то и другое — проблема конфигурации (неверная команда запуска),
+      // а не ошибка Claude.
+      const errCode = (err as NodeJS.ErrnoException).code;
+      const isMissingCommand = errCode === 'ENOENT' || errCode === 'EACCES';
+
       this.callbacks.onCompleted(this.workId, {
         exitCode: -1,
-        reason: 'error',
+        reason: isMissingCommand ? 'config' : 'error',
         errorDetail: err.message,
       });
       this.process = null;

@@ -161,6 +161,18 @@
               <option value="python">Python</option>
             </select>
           </label>
+          <label>Claude command
+            <select id="set-claude-command-mode">
+              <option value="claude">claude — обычный CLI</option>
+              <option value="claude-sm">claude-sm — враппер со snapshot</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <small>Как запускать Claude Code. claude-sm сорсит shell-snapshot и нужен только для окружения с shell-функцией.</small>
+          </label>
+          <label id="set-claude-command-custom-row" class="hidden">Command or absolute path
+            <input type="text" id="set-claude-command-custom" placeholder="/Users/you/.local/bin/opencode">
+            <small>Имя исполняемого файла из PATH или абсолютный путь.</small>
+          </label>
           <label>Custom prompt fragment
             <textarea id="set-custom-prompt" rows="6" placeholder="System-level instructions prepended to every prompt..."></textarea>
             <small>Prepended at the start of every user message. Use for rules that must be followed in all sessions.</small>
