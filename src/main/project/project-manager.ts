@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Project } from '../../shared/types';
 import { load, save } from '../storage/store';
-import { Profile } from '../claude/claude-config';
+import { Profile, isProtectedConfigPath } from '../claude/claude-config';
 import { initRepo } from '../git/git-service';
 
 export function createProject(params: {
@@ -17,6 +17,16 @@ export function createProject(params: {
 
   // Resolve ~ and relative paths to absolute
   const resolvedPath = resolvePath(params.path);
+
+  // $HOME and / are not projects: their .claude is the global Claude Code
+  // config, and generating project settings there wipes the user's own
+  // permissions and installs a relative-path hook globally.
+  if (isProtectedConfigPath(resolvedPath)) {
+    throw new Error(
+      `Нельзя добавить '${resolvedPath}' как проект: это домашняя директория ` +
+      `(её .claude — глобальный конфиг Claude Code). Выберите конкретный репозиторий.`
+    );
+  }
 
   // Handle git init before project creation
   if (params.initRepo) {

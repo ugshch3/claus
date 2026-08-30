@@ -7,6 +7,12 @@ export interface Project {
   slug: string;
   profile: 'android' | 'frontend' | 'python' | 'generic';
   createdAt: string;    // ISO 8601
+  /**
+   * Runtime-only: whether Claude Code trusts this workspace. Untrusted
+   * workspaces ignore permissions.allow from project settings files.
+   * Computed on read, never persisted.
+   */
+  trusted?: boolean;
 }
 
 export interface Work {

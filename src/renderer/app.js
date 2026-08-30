@@ -328,6 +328,17 @@ function renderProjectList() {
     name.textContent = p.name;
     name.addEventListener('click', () => selectProject(p.id));
 
+    if (p.trusted === false) {
+      const warn = document.createElement('span');
+      warn.className = 'project-untrusted';
+      warn.textContent = '\u26a0';
+      warn.title =
+        'Workspace не доверен: Claude Code игнорирует permissions.allow из ' +
+        'настроек проекта, вызовы MCP и других инструментов будут отклонены.\n' +
+        'Запустите claude в этой папке интерактивно один раз и примите trust-диалог.';
+      name.appendChild(warn);
+    }
+
     const del = document.createElement('button');
     del.className = 'project-delete';
     del.textContent = '×';
@@ -352,7 +363,9 @@ async function selectProject(id) {
   const project = state.projects.find(p => p.id === id);
   document.getElementById('works-title').textContent =
     project?.name || 'Select a project';
-  document.getElementById('works-path').textContent = project?.path || '';
+  document.getElementById('works-path').textContent =
+    (project?.path || '') +
+    (project && project.trusted === false ? '  \u26a0 workspace не доверен' : '');
   document.getElementById('btn-new-work').classList.remove('hidden');
   document.getElementById('work-detail').classList.add('hidden');
   document.getElementById('work-create-form').classList.add('hidden');

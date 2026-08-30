@@ -83,6 +83,53 @@ function getMcpAllowRules(): string[] {
   return FALLBACK_MCP_SERVERS.map(s => `mcp__${s}`);
 }
 
+const BACKUP_SUFFIX = '.backup';
+
+function realpath(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * True for paths whose `.claude` directory is NOT project-local: $HOME (whose
+ * .claude IS the global Claude Code config) and the filesystem root. Writing a
+ * generated settings.json there would clobber the user's global configuration
+ * and register project hooks with relative paths globally.
+ */
+export function isProtectedConfigPath(projectPath: string): boolean {
+  const target = realpath(projectPath);
+  return target === realpath(os.homedir()) || target === path.parse(target).root;
+}
+
+/**
+ * Whether Claude Code trusts this workspace. Untrusted workspaces silently
+ * ignore every permissions.allow entry from project settings files, so the
+ * permissions we generate have no effect there.
+ */
+export function isWorkspaceTrusted(projectPath: string): boolean {
+  try {
+    const claudeJson = JSON.parse(
+      fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf-8')
+    );
+    const entry = (claudeJson.projects ?? {})[realpath(projectPath)]
+      ?? (claudeJson.projects ?? {})[projectPath];
+    return entry?.hasTrustDialogAccepted === true;
+  } catch {
+    return true; // can't tell — don't cry wolf
+  }
+}
+
+/** Copy `file` to `file.backup` once, before we overwrite it for the first time. */
+function backupOnce(file: string): void {
+  const backup = file + BACKUP_SUFFIX;
+  if (!fs.existsSync(file)) return;  // nothing to back up
+  if (fs.existsSync(backup)) return; // already backed up
+  fs.copyFileSync(file, backup);
+}
+
 function generateSettingsJson(): string {
   const settings = {
     permissions: {
@@ -131,6 +178,16 @@ function ensureGitignore(projectPath: string): void {
 }
 
 export function sync(projectPath: string, profile: Profile): void {
+  if (isProtectedConfigPath(projectPath)) {
+    // Never generate project config into the global ~/.claude — doing so
+    // replaces the user's own permissions and registers a PreToolUse hook
+    // with a relative path that breaks in every other directory.
+    console.warn(
+      `Refusing to write Claude config into '${projectPath}': it is the global config location, not a project`
+    );
+    return;
+  }
+
   const claudeDir = path.join(projectPath, '.claude');
   const hooksDir = path.join(claudeDir, 'hooks');
   const settingsFile = path.join(claudeDir, 'settings.json');
@@ -147,7 +204,8 @@ export function sync(projectPath: string, profile: Profile): void {
   // Ensure .claude/ is gitignored after directories exist
   ensureGitignore(projectPath);
 
-  // Always overwrite
+  // Always overwrite — but keep a one-time backup of whatever was there before
+  backupOnce(settingsFile);
   fs.writeFileSync(settingsFile, generateSettingsJson(), 'utf-8');
   fs.writeFileSync(hookFile, generateHookScript(profile), 'utf-8');
   fs.chmodSync(hookFile, 0o755);
@@ -175,11 +233,16 @@ function generateLocalSettingsJson(): string {
   return JSON.stringify(settings, null, 2) + '\n';
 }
 
-const LOCAL_BACKUP_SUFFIX = '.backup';
+// Runs currently holding a project's settings.local.json, keyed by project path.
+// Holder ids (work ids) instead of a plain counter: a stray release for a work
+// that never acquired can no longer restore the file under a live run, and a
+// re-spawn of the same work is idempotent.
+const localSettingsHolders = new Map<string, Set<string>>();
 
-// Reference count of active runs per project directory.
-// Ensures settings.local.json is only restored when the LAST run in a project finishes.
-const projectRunCount = new Map<string, number>();
+/** Whether any run currently holds this project's generated settings.local.json. */
+export function hasActiveLocalSettings(projectPath: string): boolean {
+  return (localSettingsHolders.get(projectPath)?.size ?? 0) > 0;
+}
 
 /**
  * Acquire local settings for a run. Backs up the user's original
@@ -187,39 +250,46 @@ const projectRunCount = new Map<string, number>();
  * our permissive settings. Safe to call concurrently — only the first
  * call creates a backup, only the last matching release() restores it.
  */
-export function acquireLocalSettings(projectPath: string): void {
-  const count = projectRunCount.get(projectPath) || 0;
-  if (count === 0) {
+export function acquireLocalSettings(projectPath: string, holderId: string): void {
+  let holders = localSettingsHolders.get(projectPath);
+  if (!holders) {
+    holders = new Set();
+    localSettingsHolders.set(projectPath, holders);
+  }
+  if (holders.size === 0) {
     backupLocalSettings(projectPath);
   }
-  projectRunCount.set(projectPath, count + 1);
+  holders.add(holderId);
   writeLocalSettings(projectPath);
 }
 
 /**
  * Release local settings after a run finishes. Restores the user's
  * original settings.local.json only when no other runs remain active
- * in the same project directory.
+ * in the same project directory. A release from a holder that never
+ * acquired is ignored — otherwise stopping or deleting an idle Work
+ * would strip permissions from a sibling run that is still going.
  */
-export function releaseLocalSettings(projectPath: string): void {
-  const count = projectRunCount.get(projectPath);
-  if (count === undefined || count <= 1) {
-    projectRunCount.delete(projectPath);
+export function releaseLocalSettings(projectPath: string, holderId: string): void {
+  const holders = localSettingsHolders.get(projectPath);
+  if (!holders || !holders.delete(holderId)) {
+    return; // this holder never acquired — nothing to release
+  }
+  if (holders.size === 0) {
+    localSettingsHolders.delete(projectPath);
     restoreLocalSettings(projectPath);
-  } else {
-    projectRunCount.set(projectPath, count - 1);
   }
 }
 
 /**
  * Release all local settings — used on app shutdown to restore every
- * project's original settings.local.json regardless of active run count.
+ * project's original settings.local.json regardless of active holders.
  */
 export function releaseAllLocalSettings(): void {
-  for (const [projectPath] of projectRunCount) {
+  for (const [projectPath] of localSettingsHolders) {
     restoreLocalSettings(projectPath);
   }
-  projectRunCount.clear();
+  localSettingsHolders.clear();
 }
 
 /**
@@ -228,7 +298,7 @@ export function releaseAllLocalSettings(): void {
  */
 export function restoreLocalSettings(projectPath: string): void {
   const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
-  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
+  const backupFile = localSettings + BACKUP_SUFFIX;
 
   if (fs.existsSync(backupFile)) {
     fs.copyFileSync(backupFile, localSettings);
@@ -241,13 +311,7 @@ export function restoreLocalSettings(projectPath: string): void {
 // ---- Internal ----
 
 function backupLocalSettings(projectPath: string): void {
-  const localSettings = path.join(projectPath, '.claude', 'settings.local.json');
-  const backupFile = localSettings + LOCAL_BACKUP_SUFFIX;
-
-  if (!fs.existsSync(localSettings)) return; // nothing to back up
-  if (fs.existsSync(backupFile)) return;      // already backed up
-
-  fs.copyFileSync(localSettings, backupFile);
+  backupOnce(path.join(projectPath, '.claude', 'settings.local.json'));
 }
 
 function writeLocalSettings(projectPath: string): void {

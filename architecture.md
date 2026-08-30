@@ -172,10 +172,13 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|---------|
-| `sync(projectPath, profile)` | `(path: string, profile: Profile) => void` | Создаёт `.claude/` + `hooks/`, дополняет `.gitignore` (`.claude/`), **всегда перезаписывает** `settings.json` и `classify-bash.sh` |
+| `sync(projectPath, profile)` | `(path: string, profile: Profile) => void` | Создаёт `.claude/` + `hooks/`, дополняет `.gitignore` (`.claude/`), **всегда перезаписывает** `settings.json` (с одноразовым `.backup`) и `classify-bash.sh`. Для защищённых путей (`isProtectedConfigPath`) не делает ничего |
+| `isProtectedConfigPath(path)` | `(path: string) => boolean` | `true` для `$HOME` и корня ФС — их `.claude` является глобальным конфигом Claude Code, а не проектным |
+| `isWorkspaceTrusted(path)` | `(path: string) => boolean` | Читает `projects[path].hasTrustDialogAccepted` из `~/.claude.json`. В недоверенном workspace Claude Code игнорирует все `permissions.allow` из настроек проекта |
 | `generateHookScript(profile)` | `(profile: Profile) => string` | Генерирует тело `classify-bash.sh` с учётом профиля |
-| `acquireLocalSettings(projectPath)` | `(path: string) => void` | Reference-counted: на первом активном Run в проекте бэкапит `settings.local.json` (если есть), затем пишет permissive-версию. Безопасен при конкурентных Run |
-| `releaseLocalSettings(projectPath)` | `(path: string) => void` | Уменьшает счётчик; при последнем Run восстанавливает оригинал `settings.local.json` |
+| `acquireLocalSettings(projectPath, holderId)` | `(path: string, holderId: string) => void` | На первом активном Run в проекте бэкапит `settings.local.json` (если есть), затем пишет permissive-версию. Держатели учитываются по `workId` (Set), поэтому повторный spawn того же Work идемпотентен |
+| `releaseLocalSettings(projectPath, holderId)` | `(path: string, holderId: string) => void` | Убирает держателя; когда держателей не осталось — восстанавливает оригинал `settings.local.json`. Release от того, кто не делал acquire, игнорируется |
+| `hasActiveLocalSettings(projectPath)` | `(path: string) => boolean` | Есть ли живой Run, удерживающий сгенерированный `settings.local.json` |
 | `releaseAllLocalSettings()` | `() => void` | Восстанавливает оригинал для всех проектов (при shutdown) |
 | `restoreLocalSettings(projectPath)` | `(path: string) => void` | Восстанавливает `settings.local.json` из `.backup` (используется при recovery после падения) |
 
@@ -216,10 +219,12 @@ type Profile = 'android' | 'frontend' | 'python' | 'generic';
 | `generic` | Нет дополнительных |
 
 ### Инварианты
-- `sync()` вызывается при создании проекта (`project:create`), авто-создании проекта из `work:create` (directory) и при смене `defaultProfile` в `settings:update` (пересинхронизация всех проектов)
+- `sync()` вызывается при старте приложения для всех проектов (`syncAllProjects()`), при создании проекта (`project:create`), авто-создании проекта из `work:create` (directory) и при смене `defaultProfile` в `settings:update`. Стартовая пересинхронизация нужна, чтобы у старых проектов не оставался устаревший шаблон (например, нерабочий `mcp__*`)
 - Всегда общий safe-whitelist (`git status`, `git diff`, `git log`, `git commit`, `git add`, `git branch`) плюс профильный
 - Blacklist: `rm -rf`, `git push --force`, `git push -f`, `curl ... | bash/sh`
 - Бэкап `settings.local.json` хранится в `settings.local.json.backup`; при отсутствии бэкапа permissive-файл остаётся на месте (безвреден до следующего `sync()`)
+- Откат `settings.local.json` посреди живого Run приводит к отказам разрешений (Claude Code перечитывает настройки между вызовами инструментов), поэтому восстановление привязано к держателям-`workId`, а не к счётчику: остановка или удаление простаивающего Work в том же проекте больше не снимает права у активного Run
+- `$HOME` нельзя добавить как проект (`createProject` бросает ошибку): его `.claude` — глобальный конфиг, и генерация проектных настроек туда затирает пользовательские разрешения и регистрирует PreToolUse-хук с относительным путём глобально
 
 ---
 
@@ -413,14 +418,15 @@ interface RunResult {
 |---------|---------|
 | `registerAllIPC(window: BrowserWindow)` | Регистрирует `project`, `settings`, `skills` и `work` (через `WorkHandlerDeps`), управляет `activeRuns` Map |
 | `shutdownAllRuns()` | Вызывается при `before-quit`. Cancel всех активных Run'ов + пометка «приложение закрыто» + `releaseAllLocalSettings()` |
-| `recoverStaleWorks()` | Вызывается при старте. Work'и с `status=IN_PROGRESS` или `currentRunPid != null` → `AWAITING_INPUT` + «восстановлен»; для таких проектов `restoreLocalSettings()` |
+| `recoverStaleWorks()` | Вызывается при старте. Work'и с `status=IN_PROGRESS` или `currentRunPid != null` → `AWAITING_INPUT` + «восстановлен»; для таких проектов `restoreLocalSettings()`, но только если проект не удерживается активным Run |
+| `syncAllProjects()` | Вызывается при старте: пересобирает `.claude/settings.json` и хуки для всех проектов, логирует предупреждение о недоверенных workspace |
 
 #### Внутренние функции (не экспортируются)
 
 | Функция | Описание |
 |---------|---------|
 | `spawnRun(workId, prompt)` | Cancel существующего Run (если есть), вычисляет `isResume = runCount > 0 && sessionFileExists(workId)`, `resolveClaudeCommand()`, `buildArgs()`, `acquireLocalSettings()`, создаёт `RunProcess`, передаёт колбэки |
-| `cancelRun(workId)` | Отменяет Run, удаляет из `activeRuns`, `releaseLocalSettings()` |
+| `cancelRun(workId)` | Если активного Run нет — выходит, не трогая настройки. Иначе отменяет Run, удаляет из `activeRuns`, `releaseLocalSettings(path, workId)` |
 | `sendWorkUpdate(workId)` | Шлёт событие `work:updated` в renderer |
 
 #### Состояние активных Run'ов
@@ -572,6 +578,7 @@ app.whenReady() → createWindow()
   ├── mainWindow.loadFile('renderer/index.html')
   ├── registerAllIPC(mainWindow)
   └── recoverStaleWorks()
+  └── syncAllProjects()
 
 app.on('before-quit') → shutdownAllRuns()
 app.on('window-all-closed') → app.quit()
@@ -595,7 +602,7 @@ work:create ──────► handler ──► createWork()
                               spawnRun(workId, description)
                                    │ isResume = runCount>0 && sessionFileExists()
                                    │ buildArgs() → ['--session-id', uuid, '-p', desc, ...]
-                                   │ acquireLocalSettings(project.path)
+                                   │ acquireLocalSettings(project.path, workId)
                                    │ new RunProcess(callbacks, workId)
                                    │ command = resolveClaudeCommand(settings)
                                    │ rp.spawn(projectPath, args, timeout, command)
@@ -616,7 +623,7 @@ work:create ──────► handler ──► createWork()
 ◄── work:updated
   {work}
                                    │
-                              releaseLocalSettings(project.path)
+                              releaseLocalSettings(project.path, workId)
 ```
 
 ### 11.2 Ответ пользователя (resume)
@@ -672,6 +679,7 @@ app.whenReady()
 | `~/.claude/skills/<skill>/SKILL.md` | Markdown | Claude Code | Глобальные скиллы (сканируются `skill-scanner.ts`) |
 | `<project>/.claude/skills/<skill>/SKILL.md` | Markdown | Claude Code | Проектные скиллы |
 | `<project>/.claude/settings.json` | JSON | `claude-config.ts` | Разрешения Claude Code для проекта |
+| `<project>/.claude/settings.json` (+`.backup`) | JSON | `claude-config.ts` | Постоянные разрешения проекта; `.backup` — одноразовая копия того, что лежало до первой генерации |
 | `<project>/.claude/settings.local.json` (+`.backup`) | JSON | `claude-config.ts` | Временные permissive-разрешения на время Run |
 | `<project>/.claude/hooks/classify-bash.sh` | Shell | `claude-config.ts` | Классификатор Bash-команд |
 

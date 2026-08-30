@@ -17,6 +17,10 @@ import {
   releaseLocalSettings,
   releaseAllLocalSettings,
   restoreLocalSettings,
+  hasActiveLocalSettings,
+  isWorkspaceTrusted,
+  sync as syncClaudeConfig,
+  Profile,
 } from '../claude/claude-config';
 
 const activeRuns = new Map<string, RunProcess>();
@@ -84,7 +88,7 @@ export function recoverStaleWorks(): void {
 
       // Restore user's settings.local.json if an orphan backup exists
       const project = getProject(work.projectId);
-      if (project && !restoredProjects.has(project.path)) {
+      if (project && !restoredProjects.has(project.path) && !hasActiveLocalSettings(project.path)) {
         restoredProjects.add(project.path);
         try {
           restoreLocalSettings(project.path);
@@ -97,6 +101,31 @@ export function recoverStaleWorks(): void {
 
   if (recovered > 0) {
     logInfo(`Recovered ${recovered} stale work(s)`);
+  }
+}
+
+/**
+ * Re-generate .claude/settings.json + hooks for every registered project.
+ *
+ * sync() used to run only when a project was created, so projects kept whatever
+ * template the app shipped that day — including the `mcp__*` wildcard that
+ * Claude Code never expands. Running it on every start keeps them current.
+ */
+export function syncAllProjects(): void {
+  const profile = load().settings.defaultProfile as Profile;
+  for (const project of load().projects) {
+    try {
+      syncClaudeConfig(project.path, (project.profile || profile) as Profile);
+      if (!isWorkspaceTrusted(project.path)) {
+        logWarn(
+          `Workspace '${project.path}' is not trusted: Claude Code will ignore ` +
+          `permissions.allow from its settings files. Run claude interactively ` +
+          `there once and accept the trust dialog.`
+        );
+      }
+    } catch (err) {
+      logError(`Failed to sync claude config for project ${project.id}`, err);
+    }
   }
 }
 
@@ -125,7 +154,15 @@ function spawnRun(workId: string, prompt: string): void {
 
   // Replace user's settings.local.json with our permissions for the duration of this run.
   // Ref-counted: only the first concurrent run backs up, only the last one restores.
-  acquireLocalSettings(project.path);
+  if (!isWorkspaceTrusted(project.path)) {
+    logWarn(
+      `Run ${workId}: workspace '${project.path}' is not trusted — Claude Code ` +
+      `ignores permissions.allow from project settings, so MCP and other tools ` +
+      `will be denied. Accept the trust dialog there once.`
+    );
+  }
+
+  acquireLocalSettings(project.path, workId);
 
   const rp = new RunProcess(
     {
@@ -138,9 +175,10 @@ function spawnRun(workId: string, prompt: string): void {
         mainWindow.webContents.send(EVENTS.RUN_EVENT, { workId, event });
       },
       onCompleted: (sessionId: string, result: RunResult) => {
-        // Guard: if onCompleted was already called (defence in depth — RunProcess
-        // also has a completed flag, but this protects against edge cases)
-        if (!activeRuns.has(workId)) return;
+        // Guard: ignore completions from a run that is no longer the active one
+        // for this work (cancelled or replaced by a re-spawn) — otherwise a dead
+        // process would report over, and release the settings of, the live run.
+        if (activeRuns.get(workId) !== rp) return;
 
         const NOTE: Record<RunResult['reason'], string | undefined> = {
           ok: undefined,
@@ -158,7 +196,7 @@ function spawnRun(workId: string, prompt: string): void {
         }
         markRunCompleted(workId, NOTE[result.reason], result.errorDetail);
         activeRuns.delete(workId);
-        releaseLocalSettings(project.path);
+        releaseLocalSettings(project.path, workId);
         mainWindow.webContents.send(EVENTS.RUN_COMPLETED, {
           workId,
           exitCode: result.exitCode,
@@ -177,7 +215,13 @@ function spawnRun(workId: string, prompt: string): void {
 
 function cancelRun(workId: string): void {
   const rp = activeRuns.get(workId);
-  if (rp && rp.isRunning()) {
+  if (!rp) {
+    // Nothing is running for this Work. Do NOT release settings here: stopping
+    // or deleting an idle Work must not strip permissions from a sibling run
+    // that is still active in the same project.
+    return;
+  }
+  if (rp.isRunning()) {
     rp.cancel();
   }
   activeRuns.delete(workId);
@@ -186,7 +230,7 @@ function cancelRun(workId: string): void {
   if (work) {
     const project = getProject(work.projectId);
     if (project) {
-      releaseLocalSettings(project.path);
+      releaseLocalSettings(project.path, workId);
     }
   }
 }

@@ -26,6 +26,7 @@ body {
 #project-list li:hover { background: #1e1e3a; }
 #project-list li.active { background: #2a2a5a; color: #fff; }
 .project-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-untrusted { margin-left: 6px; color: #d08770; cursor: help; }
 .project-delete {
   background: none; border: none; color: #555; cursor: pointer; font-size: 14px;
   padding: 0 4px; line-height: 1; visibility: hidden;

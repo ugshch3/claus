@@ -3,19 +3,19 @@ import {
   listProjects, getProject, createProject, deleteProject,
 } from '../../project/project-manager';
 import { isDirty, discardChanges, branchExists } from '../../git/git-service';
-import { sync as syncClaudeConfig } from '../../claude/claude-config';
+import { sync as syncClaudeConfig, isWorkspaceTrusted } from '../../claude/claude-config';
 import { Profile } from '../../claude/claude-config';
 import { IPC } from '../../../shared/ipc-channels';
 
 export function registerProjectHandlers(): void {
   ipcMain.handle(IPC.PROJECT_LIST, async () => {
-    return listProjects();
+    return listProjects().map(p => ({ ...p, trusted: isWorkspaceTrusted(p.path) }));
   });
 
   ipcMain.handle(IPC.PROJECT_GET, async (_event, { id }: { id: string }) => {
     const project = getProject(id);
     if (!project) throw new Error(`Проект с id '${id}' не найден`);
-    return project;
+    return { ...project, trusted: isWorkspaceTrusted(project.path) };
   });
 
   ipcMain.handle(

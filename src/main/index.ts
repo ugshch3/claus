@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
-import { registerAllIPC, shutdownAllRuns, recoverStaleWorks } from './ipc/register';
+import { registerAllIPC, shutdownAllRuns, recoverStaleWorks, syncAllProjects } from './ipc/register';
 import { logInfo } from './utils/logger';
 
 let mainWindow: BrowserWindow | null = null;
@@ -27,6 +27,9 @@ function createWindow(): void {
 
   // Recover any works left in a stale state from previous run
   recoverStaleWorks();
+
+  // Refresh generated .claude config for every project (templates evolve)
+  syncAllProjects();
 
   logInfo('Application started');
 }
