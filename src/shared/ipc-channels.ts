@@ -23,6 +23,7 @@ export const IPC = {
   WORK_RENAME: 'work:rename',
   WORK_HISTORY: 'work:history',
   WORK_SET_MODEL: 'work:set-model',
+  WORK_MOVE_TO_BOTTOM: 'work:moveToBottom',
 
   // Settings
   SETTINGS_GET: 'settings:get',
