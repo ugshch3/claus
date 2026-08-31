@@ -442,7 +442,13 @@ function bindForms() {
     } else {
       dirLabel.classList.add('hidden');
     }
+    // Предзаполняем селектор модели дефолтом из Settings
+    document.getElementById('work-model').value = state.settings.defaultModel || 'default';
+    document.getElementById('work-model-custom').value = state.settings.defaultModelCustom || '';
+    syncModelCustomVisibility('work-model', 'work-model-custom-row');
   });
+
+  bindModelSelect('work-model', 'work-model-custom-row');
 
   document.getElementById('btn-cancel-work').addEventListener('click', () => {
     document.getElementById('work-create-form').classList.add('hidden');
@@ -457,7 +463,14 @@ function bindForms() {
     const description = document.getElementById('work-desc').value.trim();
     if (!name || !description) return;
 
-    const params = { name, description };
+    const model = document.getElementById('work-model').value;
+    const modelCustom = document.getElementById('work-model-custom').value.trim();
+    if (model === 'custom' && !modelCustom) {
+      showDialog('Model', '<p>Укажите model id для режима Custom.</p>', [{ label: 'OK' }]);
+      return;
+    }
+
+    const params = { name, description, model, modelCustom };
     const directory = document.getElementById('work-dir').value.trim();
     if (directory) {
       params.directory = directory;
