@@ -1,6 +1,6 @@
 import * as os from 'os';
 import * as path from 'path';
-import { Settings } from '../../shared/types';
+import { ModelChoice, Settings } from '../../shared/types';
 
 const PRESET_COMMANDS: Record<string, string> = {
   claude: 'claude',
@@ -19,6 +19,20 @@ export function resolveClaudeCommand(settings: Settings): string {
     return custom || PRESET_COMMANDS.claude;
   }
   return PRESET_COMMANDS[settings.claudeCommandMode] || PRESET_COMMANDS.claude;
+}
+
+/**
+ * Резолвит значение для флага `--model`, либо null, если флаг передавать не нужно
+ * (модель 'default', либо 'custom' с пустой строкой после trim — тогда используется
+ * дефолт самого claude CLI вместо падения с пустым `--model ""`).
+ */
+export function resolveModelArg(model: ModelChoice | undefined, modelCustom: string | undefined): string | null {
+  if (!model || model === 'default') return null;
+  if (model === 'custom') {
+    const custom = (modelCustom || '').trim();
+    return custom || null;
+  }
+  return model;
 }
 
 /**

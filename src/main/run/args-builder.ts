@@ -7,7 +7,8 @@ export function buildArgs(
   sessionId: string,
   prompt: string,
   settings: Settings,
-  isResume: boolean = false
+  isResume: boolean = false,
+  modelArg: string | null = null
 ): string[] {
   const args: string[] = [];
 
@@ -26,6 +27,10 @@ export function buildArgs(
   args.push('-p', prompt);
   args.push('--output-format', 'stream-json');
   args.push('--verbose');  // required for stream-json to work
+
+  if (modelArg) {
+    args.push('--model', modelArg);
+  }
 
   if (settings.defaultMaxTurns > 0) {
     args.push('--max-turns', String(settings.defaultMaxTurns));
