@@ -29,6 +29,7 @@ interface ElectronAPI {
   workRename(id: string, name: string): Promise<void>;
   workHistory(id: string): Promise<{ messages: HistoryEntry[] }>;
   workSetModel(id: string, model: ModelChoice, modelCustom?: string): Promise<void>;
+  workMoveToBottom(id: string): Promise<void>;
 
   settingsGet(): Promise<Settings>;
   settingsUpdate(params: Partial<Settings>): Promise<Settings>;
