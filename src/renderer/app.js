@@ -672,6 +672,24 @@ function renderWorkList() {
     li.appendChild(main);
     li.appendChild(renderStatusBadge(w.status, w.statusNote));
 
+    if (state.viewingActive) {
+      const moveBtn = document.createElement('button');
+      moveBtn.className = 'icon-btn';
+      moveBtn.title = 'Move to bottom';
+      moveBtn.textContent = '↓';
+      moveBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await api.workMoveToBottom(w.id);
+          await loadActiveWorks();
+          await loadWorks();
+        } catch (err) {
+          console.error('workMoveToBottom failed:', err);
+        }
+      });
+      li.appendChild(moveBtn);
+    }
+
     li.addEventListener('click', () => selectWork(w.id));
     list.appendChild(li);
   });
