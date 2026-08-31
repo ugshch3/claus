@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { RunProcess } from '../run/run-process';
 import { buildArgs } from '../run/args-builder';
-import { resolveClaudeCommand } from '../run/command';
+import { resolveClaudeCommand, resolveModelArg } from '../run/command';
 import { getWork, markRunStarted, markRunCompleted, listWorks, updateWorkDirect, sessionFileExists } from '../work/work-manager';
 import { getProject } from '../project/project-manager';
 import { load, save } from '../storage/store';
@@ -150,7 +150,7 @@ function spawnRun(workId: string, prompt: string): void {
   // Determine if this is a resume (only if session file exists from previous run)
   const isResume = work.runCount > 0 && sessionFileExists(workId);
 
-  const args = buildArgs(workId, prompt, settings, isResume);
+  const args = buildArgs(workId, prompt, settings, isResume, resolveModelArg(work.model, work.modelCustom));
 
   // Replace user's settings.local.json with our permissions for the duration of this run.
   // Ref-counted: only the first concurrent run backs up, only the last one restores.
