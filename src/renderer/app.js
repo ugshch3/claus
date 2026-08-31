@@ -442,7 +442,18 @@ function bindForms() {
     } else {
       dirLabel.classList.add('hidden');
     }
+    // Предзаполняем селектор модели дефолтом из Settings
+    document.getElementById('work-model').value = state.settings.defaultModel || 'default';
+    document.getElementById('work-model-custom').value = state.settings.defaultModelCustom || '';
+    syncModelCustomVisibility('work-model', 'work-model-custom-row');
   });
+
+  bindModelSelect('work-model', 'work-model-custom-row');
+
+  // Work Detail: смена модели персистится сразу через workSetModel
+  bindModelSelect('work-detail-model', 'work-detail-model-custom-row');
+  document.getElementById('work-detail-model').addEventListener('change', persistWorkDetailModel);
+  document.getElementById('work-detail-model-custom').addEventListener('change', persistWorkDetailModel);
 
   document.getElementById('btn-cancel-work').addEventListener('click', () => {
     document.getElementById('work-create-form').classList.add('hidden');
@@ -457,7 +468,14 @@ function bindForms() {
     const description = document.getElementById('work-desc').value.trim();
     if (!name || !description) return;
 
-    const params = { name, description };
+    const model = document.getElementById('work-model').value;
+    const modelCustom = document.getElementById('work-model-custom').value.trim();
+    if (model === 'custom' && !modelCustom) {
+      showDialog('Model', '<p>Укажите model id для режима Custom.</p>', [{ label: 'OK' }]);
+      return;
+    }
+
+    const params = { name, description, model, modelCustom };
     const directory = document.getElementById('work-dir').value.trim();
     if (directory) {
       params.directory = directory;
@@ -569,6 +587,7 @@ function bindForms() {
   document.getElementById('set-claude-command-mode').addEventListener('change', () => {
     toggleClaudeCommandCustom();
   });
+  bindModelSelect('set-default-model', 'set-default-model-custom-row');
 
   document.getElementById('form-settings').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -580,6 +599,14 @@ function bindForms() {
       ]);
       return;
     }
+    const defaultModel = document.getElementById('set-default-model').value;
+    const defaultModelCustom = document.getElementById('set-default-model-custom').value.trim();
+    if (defaultModel === 'custom' && !defaultModelCustom) {
+      showDialog('Default model', '<p>Укажите model id для режима Custom.</p>', [
+        { label: 'OK' },
+      ]);
+      return;
+    }
     const settings = {
       watchdogTimeoutMinutes: parseInt(document.getElementById('set-watchdog').value) || 10,
       defaultMaxTurns: parseInt(document.getElementById('set-max-turns').value) || 25,
@@ -587,6 +614,8 @@ function bindForms() {
       customPromptFragment: document.getElementById('set-custom-prompt').value,
       claudeCommandMode: commandMode,
       claudeCommandCustom: commandCustom,
+      defaultModel,
+      defaultModelCustom,
     };
     state.settings = await api.settingsUpdate(settings);
     renderSettingsForm();
@@ -689,11 +718,16 @@ async function renderWorkDetail(work, lastResult) {
   const cancelBtn = document.getElementById('btn-cancel-run');
   const deleteBtn = document.getElementById('btn-delete-work');
 
+  const modelRow = document.getElementById('work-detail-model-row');
+  const modelCustomRow = document.getElementById('work-detail-model-custom-row');
+
   if (work.status === 'IN_PROGRESS') {
     runProgress.classList.remove('hidden');
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.remove('hidden');
     deleteBtn.classList.add('hidden');
+    modelRow.classList.add('hidden');
+    modelCustomRow.classList.add('hidden');
     // Show existing events if we have them
     renderStreamEvents(work.id);
   } else if (work.status === 'AWAITING_INPUT') {
@@ -702,6 +736,10 @@ async function renderWorkDetail(work, lastResult) {
     document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.add('hidden');
+    modelRow.classList.remove('hidden');
+    document.getElementById('work-detail-model').value = work.model || 'default';
+    document.getElementById('work-detail-model-custom').value = work.modelCustom || '';
+    syncModelCustomVisibility('work-detail-model', 'work-detail-model-custom-row');
 
     // Render full history (or error if present)
     const historyEl = document.getElementById('work-history');
@@ -721,6 +759,8 @@ async function renderWorkDetail(work, lastResult) {
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.remove('hidden');
+    modelRow.classList.add('hidden');
+    modelCustomRow.classList.add('hidden');
 
     // Always show history for completed works
     document.getElementById('awaiting-input').classList.remove('hidden');
@@ -1022,7 +1062,11 @@ function renderSettingsForm() {
     state.settings.claudeCommandMode || 'claude';
   document.getElementById('set-claude-command-custom').value =
     state.settings.claudeCommandCustom || '';
+  document.getElementById('set-default-model').value = state.settings.defaultModel || 'default';
+  document.getElementById('set-default-model-custom').value =
+    state.settings.defaultModelCustom || '';
   toggleClaudeCommandCustom();
+  syncModelCustomVisibility('set-default-model', 'set-default-model-custom-row');
 }
 
 // Поле произвольной команды показываем только в режиме Custom.
@@ -1031,6 +1075,30 @@ function toggleClaudeCommandCustom() {
   document
     .getElementById('set-claude-command-custom-row')
     .classList.toggle('hidden', !isCustom);
+}
+
+// Общий хелпер для трёх селекторов модели (Settings / New Work / Work Detail):
+// показывает текстовое поле model id только когда выбран 'custom'.
+function syncModelCustomVisibility(selectId, customRowId) {
+  const select = document.getElementById(selectId);
+  const row = document.getElementById(customRowId);
+  row.classList.toggle('hidden', select.value !== 'custom');
+}
+
+function bindModelSelect(selectId, customRowId) {
+  document.getElementById(selectId).addEventListener('change', () => {
+    syncModelCustomVisibility(selectId, customRowId);
+  });
+  syncModelCustomVisibility(selectId, customRowId);
+}
+
+// Персистит смену модели в Work Detail сразу в Work (не дожидаясь Send/Restart Run)
+async function persistWorkDetailModel() {
+  if (!state.selectedWorkId) return;
+  const model = document.getElementById('work-detail-model').value;
+  const modelCustom = document.getElementById('work-detail-model-custom').value.trim();
+  if (model === 'custom' && !modelCustom) return;
+  await api.workSetModel(state.selectedWorkId, model, modelCustom);
 }
 
 // ---- IPC Events (Main → Renderer) ----

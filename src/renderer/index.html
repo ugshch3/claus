@@ -82,6 +82,19 @@
               </div>
             </label>
             <label id="work-dir-label" class="hidden">Directory <input type="text" id="work-dir" placeholder="/path/to/project"></label>
+            <label>Model
+              <select id="work-model">
+                <option value="default">Default</option>
+                <option value="sonnet">Sonnet</option>
+                <option value="opus">Opus</option>
+                <option value="haiku">Haiku</option>
+                <option value="fable">Fable</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            <label id="work-model-custom-row" class="hidden">Model id
+              <input type="text" id="work-model-custom" placeholder="claude-opus-4-5-20250929">
+            </label>
             <div class="form-actions">
               <button type="submit">Create & Run</button>
               <button type="button" id="btn-cancel-work">Cancel</button>
@@ -118,6 +131,19 @@
 
           <!-- AWAITING_INPUT: history + response -->
           <div id="awaiting-input" class="hidden">
+            <label id="work-detail-model-row">Model
+              <select id="work-detail-model">
+                <option value="default">Default</option>
+                <option value="sonnet">Sonnet</option>
+                <option value="opus">Opus</option>
+                <option value="haiku">Haiku</option>
+                <option value="fable">Fable</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            <label id="work-detail-model-custom-row" class="hidden">Model id
+              <input type="text" id="work-detail-model-custom" placeholder="claude-opus-4-5-20250929">
+            </label>
             <div id="work-history"></div>
             <form id="form-respond">
               <div class="input-with-slash">
@@ -172,6 +198,20 @@
           <label id="set-claude-command-custom-row" class="hidden">Command or absolute path
             <input type="text" id="set-claude-command-custom" placeholder="/Users/you/.local/bin/opencode">
             <small>Имя исполняемого файла из PATH или абсолютный путь.</small>
+          </label>
+          <label>Default model
+            <select id="set-default-model">
+              <option value="default">Default</option>
+              <option value="sonnet">Sonnet</option>
+              <option value="opus">Opus</option>
+              <option value="haiku">Haiku</option>
+              <option value="fable">Fable</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <small>Модель, которой предзаполняется форма создания нового Work.</small>
+          </label>
+          <label id="set-default-model-custom-row" class="hidden">Model id
+            <input type="text" id="set-default-model-custom" placeholder="claude-opus-4-5-20250929">
           </label>
           <label>Custom prompt fragment
             <textarea id="set-custom-prompt" rows="6" placeholder="System-level instructions prepended to every prompt..."></textarea>

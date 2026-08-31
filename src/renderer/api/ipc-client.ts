@@ -1,7 +1,7 @@
 // Типизированная обёртка над window.electronAPI
 // Единственное место в renderer, где вызывается window.electronAPI.*
 
-import { Project, Work, Settings, StreamEvent, RunResult, HistoryEntry } from '../../shared/types';
+import { Project, Work, Settings, StreamEvent, RunResult, HistoryEntry, ModelChoice } from '../../shared/types';
 
 declare global {
   interface Window {
@@ -20,7 +20,7 @@ interface ElectronAPI {
 
   workList(projectId?: string): Promise<Work[]>;
   workGet(id: string): Promise<{ work: Work; lastResult: string | null }>;
-  workCreate(params: { projectId?: string; name?: string; description: string; directory?: string }): Promise<Work>;
+  workCreate(params: { projectId?: string; name?: string; description: string; directory?: string; model?: ModelChoice; modelCustom?: string }): Promise<Work>;
   workDelete(id: string): Promise<void>;
   workComplete(id: string): Promise<void>;
   workRespond(id: string, message: string): Promise<void>;
@@ -28,6 +28,7 @@ interface ElectronAPI {
   workRestartRun(id: string): Promise<void>;
   workRename(id: string, name: string): Promise<void>;
   workHistory(id: string): Promise<{ messages: HistoryEntry[] }>;
+  workSetModel(id: string, model: ModelChoice, modelCustom?: string): Promise<void>;
 
   settingsGet(): Promise<Settings>;
   settingsUpdate(params: Partial<Settings>): Promise<Settings>;
