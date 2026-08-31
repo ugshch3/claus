@@ -569,6 +569,7 @@ function bindForms() {
   document.getElementById('set-claude-command-mode').addEventListener('change', () => {
     toggleClaudeCommandCustom();
   });
+  bindModelSelect('set-default-model', 'set-default-model-custom-row');
 
   document.getElementById('form-settings').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -580,6 +581,14 @@ function bindForms() {
       ]);
       return;
     }
+    const defaultModel = document.getElementById('set-default-model').value;
+    const defaultModelCustom = document.getElementById('set-default-model-custom').value.trim();
+    if (defaultModel === 'custom' && !defaultModelCustom) {
+      showDialog('Default model', '<p>Укажите model id для режима Custom.</p>', [
+        { label: 'OK' },
+      ]);
+      return;
+    }
     const settings = {
       watchdogTimeoutMinutes: parseInt(document.getElementById('set-watchdog').value) || 10,
       defaultMaxTurns: parseInt(document.getElementById('set-max-turns').value) || 25,
@@ -587,6 +596,8 @@ function bindForms() {
       customPromptFragment: document.getElementById('set-custom-prompt').value,
       claudeCommandMode: commandMode,
       claudeCommandCustom: commandCustom,
+      defaultModel,
+      defaultModelCustom,
     };
     state.settings = await api.settingsUpdate(settings);
     renderSettingsForm();
@@ -1022,7 +1033,11 @@ function renderSettingsForm() {
     state.settings.claudeCommandMode || 'claude';
   document.getElementById('set-claude-command-custom').value =
     state.settings.claudeCommandCustom || '';
+  document.getElementById('set-default-model').value = state.settings.defaultModel || 'default';
+  document.getElementById('set-default-model-custom').value =
+    state.settings.defaultModelCustom || '';
   toggleClaudeCommandCustom();
+  syncModelCustomVisibility('set-default-model', 'set-default-model-custom-row');
 }
 
 // Поле произвольной команды показываем только в режиме Custom.
@@ -1031,6 +1046,21 @@ function toggleClaudeCommandCustom() {
   document
     .getElementById('set-claude-command-custom-row')
     .classList.toggle('hidden', !isCustom);
+}
+
+// Общий хелпер для трёх селекторов модели (Settings / New Work / Work Detail):
+// показывает текстовое поле model id только когда выбран 'custom'.
+function syncModelCustomVisibility(selectId, customRowId) {
+  const select = document.getElementById(selectId);
+  const row = document.getElementById(customRowId);
+  row.classList.toggle('hidden', select.value !== 'custom');
+}
+
+function bindModelSelect(selectId, customRowId) {
+  document.getElementById(selectId).addEventListener('change', () => {
+    syncModelCustomVisibility(selectId, customRowId);
+  });
+  syncModelCustomVisibility(selectId, customRowId);
 }
 
 // ---- IPC Events (Main → Renderer) ----
