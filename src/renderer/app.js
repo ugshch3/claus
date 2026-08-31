@@ -450,6 +450,11 @@ function bindForms() {
 
   bindModelSelect('work-model', 'work-model-custom-row');
 
+  // Work Detail: смена модели персистится сразу через workSetModel
+  bindModelSelect('work-detail-model', 'work-detail-model-custom-row');
+  document.getElementById('work-detail-model').addEventListener('change', persistWorkDetailModel);
+  document.getElementById('work-detail-model-custom').addEventListener('change', persistWorkDetailModel);
+
   document.getElementById('btn-cancel-work').addEventListener('click', () => {
     document.getElementById('work-create-form').classList.add('hidden');
     document.getElementById('form-work-create').reset();
@@ -713,11 +718,16 @@ async function renderWorkDetail(work, lastResult) {
   const cancelBtn = document.getElementById('btn-cancel-run');
   const deleteBtn = document.getElementById('btn-delete-work');
 
+  const modelRow = document.getElementById('work-detail-model-row');
+  const modelCustomRow = document.getElementById('work-detail-model-custom-row');
+
   if (work.status === 'IN_PROGRESS') {
     runProgress.classList.remove('hidden');
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.remove('hidden');
     deleteBtn.classList.add('hidden');
+    modelRow.classList.add('hidden');
+    modelCustomRow.classList.add('hidden');
     // Show existing events if we have them
     renderStreamEvents(work.id);
   } else if (work.status === 'AWAITING_INPUT') {
@@ -726,6 +736,10 @@ async function renderWorkDetail(work, lastResult) {
     document.getElementById('form-respond').classList.remove('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.add('hidden');
+    modelRow.classList.remove('hidden');
+    document.getElementById('work-detail-model').value = work.model || 'default';
+    document.getElementById('work-detail-model-custom').value = work.modelCustom || '';
+    syncModelCustomVisibility('work-detail-model', 'work-detail-model-custom-row');
 
     // Render full history (or error if present)
     const historyEl = document.getElementById('work-history');
@@ -745,6 +759,8 @@ async function renderWorkDetail(work, lastResult) {
     awaitingInput.classList.add('hidden');
     cancelBtn.classList.add('hidden');
     deleteBtn.classList.remove('hidden');
+    modelRow.classList.add('hidden');
+    modelCustomRow.classList.add('hidden');
 
     // Always show history for completed works
     document.getElementById('awaiting-input').classList.remove('hidden');
@@ -1074,6 +1090,15 @@ function bindModelSelect(selectId, customRowId) {
     syncModelCustomVisibility(selectId, customRowId);
   });
   syncModelCustomVisibility(selectId, customRowId);
+}
+
+// Персистит смену модели в Work Detail сразу в Work (не дожидаясь Send/Restart Run)
+async function persistWorkDetailModel() {
+  if (!state.selectedWorkId) return;
+  const model = document.getElementById('work-detail-model').value;
+  const modelCustom = document.getElementById('work-detail-model-custom').value.trim();
+  if (model === 'custom' && !modelCustom) return;
+  await api.workSetModel(state.selectedWorkId, model, modelCustom);
 }
 
 // ---- IPC Events (Main → Renderer) ----
