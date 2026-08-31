@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { Work, HistoryEntry } from '../../shared/types';
+import { Work, HistoryEntry, ModelChoice } from '../../shared/types';
 import { load, save } from '../storage/store';
 import {
   getProject,
@@ -20,6 +20,8 @@ export function createWork(params: {
   name?: string;
   description: string;
   directory?: string;
+  model?: ModelChoice;
+  modelCustom?: string;
 }): Work {
   let projectId = params.projectId;
 
@@ -76,6 +78,8 @@ export function createWork(params: {
     lastActiveAt: now,
     createdAt: now,
     completedAt: null,
+    model: params.model,
+    modelCustom: params.modelCustom,
   };
 
   data.works.push(work);
@@ -245,6 +249,13 @@ export function completeWork(workId: string): void {
 export function renameWork(workId: string, name: string): void {
   updateWork(workId, work => {
     work.name = name;
+  });
+}
+
+export function setWorkModel(workId: string, model: ModelChoice, modelCustom?: string): void {
+  updateWork(workId, work => {
+    work.model = model;
+    work.modelCustom = modelCustom;
   });
 }
 
