@@ -1,10 +1,11 @@
 import { ipcMain } from 'electron';
 import {
   createWork, listWorks, getWork, getLastResult, getFullHistory,
-  completeWork, deleteWork, markRunStarted, markRunCompleted, renameWork,
+  completeWork, deleteWork, markRunStarted, markRunCompleted, renameWork, setWorkModel,
 } from '../../work/work-manager';
 import { getProject } from '../../project/project-manager';
 import { IPC } from '../../../shared/ipc-channels';
+import { ModelChoice } from '../../../shared/types';
 
 // These will be set by register.ts
 export interface WorkHandlerDeps {
@@ -32,7 +33,7 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_CREATE,
     async (
       _event,
-      params: { projectId?: string; name?: string; description: string; directory?: string }
+      params: { projectId?: string; name?: string; description: string; directory?: string; model?: ModelChoice; modelCustom?: string }
     ) => {
       const work = createWork(params);
       // Spawn the first run with the work description
@@ -77,6 +78,13 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
     IPC.WORK_RENAME,
     async (_event, { id, name }: { id: string; name: string }) => {
       renameWork(id, name);
+    }
+  );
+
+  ipcMain.handle(
+    IPC.WORK_SET_MODEL,
+    async (_event, { id, model, modelCustom }: { id: string; model: ModelChoice; modelCustom?: string }) => {
+      setWorkModel(id, model, modelCustom);
     }
   );
 

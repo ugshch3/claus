@@ -29,6 +29,8 @@ export interface Work {
   lastActiveAt: string;  // ISO 8601
   createdAt: string;
   completedAt: string | null;
+  model?: ModelChoice;   // отсутствует у Work, созданных до фичи выбора модели → трактуется как 'default'
+  modelCustom?: string;  // используется только при model === 'custom'
 }
 
 /**
@@ -39,6 +41,14 @@ export interface Work {
  */
 export type ClaudeCommandMode = 'claude' | 'claude-sm' | 'custom';
 
+/**
+ * Какую модель передавать в `--model`:
+ * 'default' — флаг не передаётся, используется дефолт самого claude CLI;
+ * 'sonnet' | 'opus' | 'haiku' | 'fable' — алиасы последних моделей;
+ * 'custom' — полный model id из соответствующего *Custom-поля.
+ */
+export type ModelChoice = 'default' | 'sonnet' | 'opus' | 'haiku' | 'fable' | 'custom';
+
 export interface Settings {
   watchdogTimeoutMinutes: number;
   defaultMaxTurns: number;
@@ -47,6 +57,8 @@ export interface Settings {
   uiMode: 'classic' | 'new';
   claudeCommandMode: ClaudeCommandMode;
   claudeCommandCustom: string;   // используется только при claudeCommandMode === 'custom'
+  defaultModel: ModelChoice;     // модель, которой предзаполняется форма создания Work
+  defaultModelCustom: string;    // используется только при defaultModel === 'custom'
 }
 
 export interface StreamEvent {
