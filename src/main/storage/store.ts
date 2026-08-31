@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS: Settings = {
   uiMode: 'classic',
   claudeCommandMode: 'claude',
   claudeCommandCustom: '',
+  defaultModel: 'default',
+  defaultModelCustom: '',
 };
 
 function getDefaultData(): AppData {
