@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import {
   createWork, listWorks, getWork, getLastResult, getFullHistory,
   completeWork, deleteWork, markRunStarted, markRunCompleted, renameWork, setWorkModel,
+  moveWorkToBottom,
 } from '../../work/work-manager';
 import { getProject } from '../../project/project-manager';
 import { IPC } from '../../../shared/ipc-channels';
@@ -87,6 +88,10 @@ export function registerWorkHandlers(d: WorkHandlerDeps): void {
       setWorkModel(id, model, modelCustom);
     }
   );
+
+  ipcMain.handle(IPC.WORK_MOVE_TO_BOTTOM, async (_event, { id }: { id: string }) => {
+    moveWorkToBottom(id);
+  });
 
   ipcMain.handle(
     IPC.WORK_HISTORY,
