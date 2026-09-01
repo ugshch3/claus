@@ -259,6 +259,18 @@ export function setWorkModel(workId: string, model: ModelChoice, modelCustom?: s
   });
 }
 
+export function moveWorkToBottom(workId: string): void {
+  const data = load();
+  const idx = data.works.findIndex(w => w.id === workId);
+  if (idx === -1) {
+    throw new Error(`Work с id '${workId}' не найден`);
+  }
+
+  const [work] = data.works.splice(idx, 1);
+  data.works.push(work);
+  save(data);
+}
+
 export function deleteWork(workId: string): void {
   const data = load();
   const idx = data.works.findIndex(w => w.id === workId);

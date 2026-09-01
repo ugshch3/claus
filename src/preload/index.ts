@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('work:history', { id }),
   workSetModel: (id: string, model: string, modelCustom?: string) =>
     ipcRenderer.invoke('work:set-model', { id, model, modelCustom }),
+  workMoveToBottom: (id: string) => ipcRenderer.invoke('work:moveToBottom', { id }),
 
   // Settings
   settingsGet: () => ipcRenderer.invoke('settings:get'),
